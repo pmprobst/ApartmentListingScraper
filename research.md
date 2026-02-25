@@ -1,6 +1,6 @@
 # Research: Top Rental Listing Sites for Utah Valley
 
-This document identifies the top three sites for listing rental contracts (apartments and houses) in Utah Valley (Provo, Orem, and surrounding areas).
+This document identifies the top four sites for listing rental contracts (apartments and houses) in Utah Valley (Provo, Orem, and surrounding areas).
 
 ---
 
@@ -28,9 +28,17 @@ This document identifies the top three sites for listing rental contracts (apart
 
 ---
 
+## 4. **Facebook Marketplace** (facebook.com/marketplace)
+
+- **Coverage:** Local rental listings (apartments, houses, rooms) in Utah Valley; users list by location (e.g., Provo, Orem, Salt Lake area). Often includes private landlords and sublets not found on traditional rental sites.
+- **Strengths:** Huge user base, strong local reach, mix of formal and informal listings (full units, rooms, sublets). Many listings appear only on Marketplace. Search and filter by location and category (Housing → Apartments for Rent / Houses for Rent).
+- **Relevance for scraping:** Requires Facebook login for full access; content is dynamic and app-heavy. Facebook’s terms of use and anti-scraping policies are strict. Consider official APIs or manual monitoring if automation is limited; otherwise use careful, respectful automation and rate limiting.
+
+---
+
 ## Other notable platforms
 
-- **Rentler** (rentler.com) – 284+ properties in Provo/Orem, good filters; strong alternative to the top three.
+- **Rentler** (rentler.com) – 284+ properties in Provo/Orem, good filters; strong alternative to the top four.
 - **ForRent.com** – Lists apartments in Orem and metro area.
 - **HomeFinder** – Utah-wide rentals including homes, condos, townhouses.
 
@@ -38,10 +46,11 @@ This document identifies the top three sites for listing rental contracts (apart
 
 ## Summary
 
-| Rank | Site              | Primary URL           | Best for                          |
-|------|-------------------|------------------------|-----------------------------------|
-| 1    | Zillow            | zillow.com             | Apartments + houses, daily updates |
-| 2    | KSL Real Estate   | homes.ksl.com          | Local Utah listings, high relevance |
-| 3    | Apartments.com    | apartments.com         | Apartments + some houses, strong filters |
+| Rank | Site                | Primary URL                 | Best for                          |
+|------|---------------------|-----------------------------|-----------------------------------|
+| 1    | Zillow              | zillow.com                  | Apartments + houses, daily updates |
+| 2    | KSL Real Estate     | homes.ksl.com               | Local Utah listings, high relevance |
+| 3    | Apartments.com      | apartments.com              | Apartments + some houses, strong filters |
+| 4    | Facebook Marketplace| facebook.com/marketplace    | Local listings, private landlords, rooms/sublets |
 
-For an application that “regularly skims” Utah Valley rental markets, prioritizing **Zillow**, **KSL Real Estate**, and **Apartments.com** will cover a large share of available listings. Add Rentler or others in a later phase if needed.
+For an application that “regularly skims” Utah Valley rental markets, prioritizing **Zillow**, **KSL Real Estate**, **Apartments.com**, and **Facebook Marketplace** will cover a large share of available listings, including many that appear only on Marketplace. Add Rentler or others in a later phase if needed.

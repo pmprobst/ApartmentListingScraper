@@ -16,6 +16,7 @@ This document outlines a high-level plan to build an application that regularly 
 1. **Zillow** – zillow.com (apartments + houses, daily updates).
 2. **KSL Real Estate** – homes.ksl.com (Utah-focused rentals).
 3. **Apartments.com** – apartments.com (apartments + some houses, strong filters).
+4. **Facebook Marketplace** – facebook.com/marketplace (local listings, private landlords, rooms/sublets; login may be required for scraping).
 
 ---
 
@@ -25,7 +26,7 @@ This document outlines a high-level plan to build an application that regularly 
    - Run on a schedule (e.g., daily or every few hours) to fetch new/updated listings.
 
 2. **Multi-site support**  
-   - Support at least the top 3 sites (Zillow, KSL, Apartments.com); design so adding Rentler or others later is straightforward.
+   - Support at least the top 4 sites (Zillow, KSL, Apartments.com, Facebook Marketplace); design so adding Rentler or others later is straightforward.
 
 3. **Configurable search criteria**  
    - Location (cities/zip codes in Utah Valley), price range, bedrooms/bathrooms, property type (apartment, house, etc.), and optionally pet policy or keywords.
@@ -53,7 +54,7 @@ This document outlines a high-level plan to build an application that regularly 
 
 - **Tech choices:** Pick a language and stack (e.g., Python + requests/BeautifulSoup or Playwright for JS-heavy sites; or Node.js if preferred). Use SQLite (or similar) for storage.
 - **Config:** Define search criteria in a config file (cities, price range, beds/baths, etc.).
-- **One-site scraper:** Implement a single scraper for one of the three sites (e.g., Zillow or KSL) that:
+- **One-site scraper:** Implement a single scraper for one of the four sites (e.g., Zillow or KSL) that:
   - Builds search URLs (or uses API) from config.
   - Fetches listing list and key fields (title, link, price, beds, baths, address, source).
   - Saves to DB with first-seen/last-seen and source.
@@ -61,7 +62,7 @@ This document outlines a high-level plan to build an application that regularly 
 
 ### Phase 2: Multi-site and scheduling
 
-- **Scrapers for the other two sites:** Reuse the same storage schema and add scrapers for KSL and Apartments.com. Share parsing and persistence logic where possible.
+- **Scrapers for the other three sites:** Reuse the same storage schema and add scrapers for KSL, Apartments.com, and Facebook Marketplace. Share parsing and persistence logic where possible. (Note: Facebook Marketplace may require authenticated sessions or browser automation due to login; handle separately if needed.)
 - **Scheduler:** Use cron (or a simple in-process scheduler) to run the full scrape on a set interval (e.g., daily).
 - **New vs. updated:** On each run, compare with stored listings; tag “new” for first-seen in this run and “updated” if details changed.
 
@@ -83,10 +84,10 @@ This document outlines a high-level plan to build an application that regularly 
 
 | Item | Description |
 |------|-------------|
-| Research | research.md – top 3 rental sites for Utah Valley (done). |
+| Research | research.md – top 4 rental sites for Utah Valley (done). |
 | Plan | plan.md – this high-level plan and feature set. |
 | Config | Search criteria (location, price, beds, etc.) in a config file. |
-| Scrapers | One module per site (Zillow, KSL, Apartments.com) with shared storage. |
+| Scrapers | One module per site (Zillow, KSL, Apartments.com, Facebook Marketplace) with shared storage. |
 | Storage | SQLite (or equivalent) with listings, timestamps, and source. |
 | Scheduler | Automated runs (e.g., cron or in-app scheduler). |
 | Alerts | Notifications for new matching listings. |
@@ -96,8 +97,9 @@ This document outlines a high-level plan to build an application that regularly 
 
 ## Risks and considerations
 
-- **Terms of use:** Each site may restrict scraping; implement conservatively and switch to APIs/feeds if available.
+- **Terms of use:** Each site may restrict scraping; implement conservatively and switch to APIs/feeds if available. Facebook Marketplace in particular has strict anti-scraping policies and typically requires login.
 - **Site changes:** Listing page structure can change; design parsers to be easy to update and add logging for parse failures.
 - **Rate limiting:** Use delays and polite concurrency to avoid blocks or bans.
+- **Facebook Marketplace:** May require authenticated sessions or browser automation (e.g., Playwright); treat as a separate integration path if needed.
 
 This plan is intended to be implemented incrementally: get one site working end-to-end, then add the others and scheduling, then alerts and any UI.
