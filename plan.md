@@ -7,7 +7,22 @@ This document outlines a high-level plan to build an application that regularly 
 ## Goal
 
 - **Input:** Target area = Utah Valley (e.g., Provo, Orem, and nearby cities).
-- **Output:** A regularly updated webpage of rental opportunities from the top listing sites, sorted by user preference, with filtering and notification so you can act on new or matching listings.
+- **Output:** A webpage of rental opportunities from the top listing sites, sorted by user preference, with filtering. The page is **hosted on GitHub** (e.g. GitHub Pages) and updated by the app (e.g. after each cron run).
+
+---
+
+## Chosen tech stack
+
+| Choice | Technology | Notes |
+|--------|------------|--------|
+| Language | **Python** | Scripts and scrapers. |
+| Scraping | **BeautifulSoup** | Parse HTML; use with `requests` for HTTP. (Add Playwright or similar later if a site requires JS or login.) |
+| Storage | **JSON files** | Listings and metadata (first-seen, last-seen, source) stored as JSON; no database. |
+| Scheduling | **Cron** | Cron (or launchd on macOS) runs the scrape script on a schedule (e.g. every 12 hours). |
+| Interaction | **Scripts** | Run the app via scripts (e.g. `python scrape.py`, `python build_page.py`); no formal CLI framework. |
+| Output | **GitHub-hosted webpage** | Generate a static HTML page (and optional CSS/JS) from the JSON data; commit and push to a repo branch or folder that serves GitHub Pages (e.g. `gh-pages` branch or `docs/` on main). |
+
+**GitHub-hosted output (how it works):** A build script reads the listings JSON and writes static files (e.g. `index.html`, optional `style.css` / `app.js`) into a directory that GitHub Pages will serve. Options: (1) Push that directory to the `gh-pages` branch, or (2) put it in `docs/` on the main branch and enable “GitHub Pages from the docs/ folder” in repo Settings. Cron can run `scrape.py` then `build_page.py`, then `git add` / `commit` / `push` so the live page updates automatically (or you run the push step manually / via a separate cron job).
 
 ---
 
@@ -70,7 +85,7 @@ Research into official or semi-official programmatic access for each of the four
 ## Desired Features
 
 1. **Scheduled skimming**  
-   - Run on a schedule (every  to fetch new/updated listings.
+   - Run on a schedule (every 12 hours) to fetch new/updated listings.
 
 2. **Multi-site support**  
    - Support at least the top 4 sites (Zillow, KSL, Apartments.com, Facebook Marketplace); design so adding Rentler or others later is straightforward.
@@ -82,16 +97,17 @@ Research into official or semi-official programmatic access for each of the four
    - Detect the same listing across sites (e.g., by address or listing ID) to avoid duplicates and merge data when possible. This feature is not a priority.
 
 5. **Persistence**  
-   - Store listings in a simple database or structured files (e.g., SQLite or JSON) with first-seen and last-seen timestamps to track new vs. updated vs. removed.
+   - Store listings in **JSON files** with first-seen and last-seen timestamps to track new vs. updated vs. removed.
 
 6. **New-listing alerts**  
-   - Notify when new listings match criteria (e.g., email, desktop notification, or a simple dashboard). Optional: “saved search” per set of criteria.
+   - Optional: notify when new listings match criteria (e.g., email or desktop notification). Primary “view” is the generated webpage.
 
 7. **Respectful scraping**  
    - Honor robots.txt, use reasonable rate limits and delays, and follow each site’s terms of use. Prefer official APIs if available (e.g., some sites offer partner or RSS feeds).
 
-8. **Simple UI or CLI**  
-   - At minimum: CLI to run a scrape and view recent/new listings. Optional: minimal web dashboard to browse results and manage criteria.
+8. **Output and interaction**  
+   - **Webpage:** Static HTML (and optional CSS/JS) generated from JSON, hosted on GitHub (GitHub Pages). Updated after each scrape run.  
+   - **Interaction:** Run the app via **scripts** (e.g. scrape script, build-page script); no formal CLI or local server required.
 
 ---
 
@@ -99,25 +115,26 @@ Research into official or semi-official programmatic access for each of the four
 
 ### Phase 1: Foundation
 
-- **Tech choices:** Pick a language and stack (e.g., Python + requests/BeautifulSoup or Playwright for JS-heavy sites; or Node.js if preferred). Use SQLite (or similar) for storage.
+- **Stack:** Python, `requests` + BeautifulSoup, JSON files for storage (see Chosen tech stack).
 - **Config:** Define search criteria in a config file (cities, price range, beds/baths, etc.).
 - **One-site scraper:** Implement a single scraper for one of the four sites (e.g., Zillow or KSL) that:
-  - Builds search URLs (or uses API) from config.
+  - Builds search URLs from config.
   - Fetches listing list and key fields (title, link, price, beds, baths, address, source).
-  - Saves to DB with first-seen/last-seen and source.
+  - Saves to JSON with first-seen/last-seen and source.
 - **Deduplication (basic):** Normalize address or external ID per listing; mark duplicates so the same property isn’t counted twice.
 
 ### Phase 2: Multi-site and scheduling
 
-- **Scrapers for the other three sites:** Reuse the same storage schema and add scrapers for KSL, Apartments.com, and Facebook Marketplace. Share parsing and persistence logic where possible. (Note: Facebook Marketplace may require authenticated sessions or browser automation due to login; handle separately if needed.)
-- **Scheduler:** Use cron (or a simple in-process scheduler) to run the full scrape on a set interval (e.g., daily).
-- **New vs. updated:** On each run, compare with stored listings; tag “new” for first-seen in this run and “updated” if details changed.
+- **Scrapers for the other three sites:** Reuse the same JSON schema and add scrapers for KSL, Apartments.com, and Facebook Marketplace. Share parsing and persistence logic where possible. (Note: Facebook Marketplace may require authenticated sessions or browser automation; handle separately if needed.)
+- **Scheduler:** Use **cron** (or launchd on macOS) to run the scrape script on a set interval (e.g., every 12 hours).
+- **New vs. updated:** On each run, compare with stored JSON; tag “new” for first-seen in this run and “updated” if details changed.
 
-### Phase 3: Alerts and usability
+### Phase 3: Webpage and scripts
 
-- **Alerts:** Implement at least one channel (e.g., email via SMTP or a simple webhook) for “new listings matching your criteria.”
-- **CLI:** Commands such as `run scrape`, `list recent`, `list new`, and optionally `list by-site`.
-- **Optional dashboard:** Simple local web page to filter and browse stored listings and manage saved criteria.
+- **Generate static webpage:** A script reads the listings JSON and generates a static HTML page (and optional CSS/JS) that displays listings, sorted/filtered by user preference. The page is suitable for GitHub Pages (no server-side logic).
+- **GitHub hosting:** After each run (or as a separate step), commit and push the generated page to the repo so GitHub Pages serves it (e.g. `gh-pages` branch, or `docs/` with “GitHub Pages from docs/” enabled, or a dedicated repo).
+- **Scripts:** Entry points such as `python scrape.py` (run scrapers, update JSON), `python build_page.py` (generate HTML from JSON); optionally a single script that does both. No formal CLI framework; invoke via shell/cron.
+- **Optional alerts:** If desired, add email or other notification when new listings appear; not required for MVP.
 
 ### Phase 4: Robustness and polish
 
@@ -134,11 +151,12 @@ Research into official or semi-official programmatic access for each of the four
 | Research | research.md – top 4 rental sites for Utah Valley (done). |
 | Plan | plan.md – this high-level plan and feature set. |
 | Config | Search criteria (location, price, beds, etc.) in a config file. |
-| Scrapers | One module per site (Zillow, KSL, Apartments.com, Facebook Marketplace) with shared storage. |
-| Storage | SQLite (or equivalent) with listings, timestamps, and source. |
-| Scheduler | Automated runs (e.g., cron or in-app scheduler). |
-| Alerts | Notifications for new matching listings. |
-| CLI / UI | CLI at minimum; optional web dashboard. |
+| Scrapers | One module per site (Zillow, KSL, Apartments.com, Facebook Marketplace) with shared logic; output to JSON. |
+| Storage | JSON files with listings, timestamps, and source. |
+| Scheduler | Cron (or launchd) running the scrape script on a schedule. |
+| Webpage | Static HTML (and optional CSS/JS) generated from JSON, hosted on GitHub (GitHub Pages). |
+| Scripts | `scrape.py` (and/or `build_page.py`) to run via shell/cron; no formal CLI or local server. |
+| Alerts | Optional: notifications for new listings; not required for MVP. |
 
 ---
 
@@ -171,4 +189,4 @@ If authentication or anti-bot measures make traditional scraping impractical (e.
 - **Rate limiting:** Use delays and polite concurrency to avoid blocks or bans.
 - **Facebook Marketplace:** May require authenticated sessions or browser automation (e.g., Playwright); treat as a separate integration path if needed.
 
-This plan is intended to be implemented incrementally: get one site working end-to-end, then add the others and scheduling, then alerts and any UI.
+This plan is intended to be implemented incrementally: get one site working end-to-end (scrape → JSON → webpage), then add the other sites, then cron and GitHub hosting.
