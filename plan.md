@@ -7,7 +7,7 @@ This document outlines a high-level plan to build an application that regularly 
 ## Goal
 
 - **Input:** Target area = Utah Valley (e.g., Provo, Orem, and nearby cities).
-- **Output:** A webpage of rental opportunities from the top listing sites, sorted by user preference, with filtering. The page is **hosted on GitHub** (e.g. GitHub Pages) and updated by the app (e.g. after each cron run).
+- **Output:** A webpage of rental opportunities from the top listing sites, sorted by user preference, with filtering. The page is **hosted on GitHub** (GitHub Pages) and updated after each **GitHub Actions** workflow run.
 
 ---
 
@@ -15,27 +15,31 @@ This document outlines a high-level plan to build an application that regularly 
 
 | Choice | Technology | Notes |
 |--------|------------|--------|
-| Language | **Python** | Scripts and scrapers. |
-| Scraping | **BeautifulSoup** | Parse HTML; use with `requests` for HTTP. (Add Playwright or similar later if a site requires JS or login.) |
-| Storage | **JSON files** | Listings and metadata (first-seen, last-seen, source) stored as JSON; no database. |
-| Scheduling | **Cron** | Cron (or launchd on macOS) runs the scrape script on a schedule (e.g. every 12 hours). |
-| Interaction | **Scripts** | Run the app via scripts (e.g. `python scrape.py`, `python build_page.py`); no formal CLI framework. |
-| Output | **GitHub-hosted webpage** | Generate a static HTML page (and optional CSS/JS) from the JSON data; commit and push to a repo branch or folder that serves GitHub Pages (e.g. `gh-pages` branch or `docs/` on main). |
+| Language | **Python** | Scripts and data pipeline. |
+| Data acquisition | **Bright Data API** | Pull scraped data via Bright Data’s API. **Start with Facebook Marketplace**, then expand to Zillow, KSL, Apartments.com. |
+| Storage | **SQLite** (python `sqlite3`) | Primary database for listings and metadata (first-seen, last-seen, source, extracted fields). Single file; no separate server. |
+| Scheduling | **GitHub Actions** | Workflow runs on a schedule (e.g. every 12 hours); runs fetch → Ollama for new listings → build_page; commits and pushes to the branch/folder that serves GitHub Pages. Credentials via GitHub Secrets. |
+| LLM extraction | **Ollama** | Parse listing text to extract structured fields. **Run only on new listings** that match the price/parameter filter. Prototype this step separately before wiring into the full pipeline. |
+| Interaction | **Scripts** | Run the app via scripts (e.g. `python fetch.py`, `python build_page.py`); run locally or via GitHub Actions. |
+| Output | **GitHub-hosted webpage** | Static HTML generated from SQLite; workflow pushes to `gh-pages` or `docs/`. Page includes a **run status** indicator (last run time, success/fail, listing count) for observability from day one. |
 
-**GitHub-hosted output (how it works):** A build script reads the listings JSON and writes static files (e.g. `index.html`, optional `style.css` / `app.js`) into a directory that GitHub Pages will serve. Options: (1) Push that directory to the `gh-pages` branch, or (2) put it in `docs/` on the main branch and enable “GitHub Pages from the docs/ folder” in repo Settings. Cron can run `scrape.py` then `build_page.py`, then `git add` / `commit` / `push` so the live page updates automatically (or you run the push step manually / via a separate cron job).
+**Data acquisition: Bright Data.** Bright Data provides a **Facebook Marketplace Scraper API** (listing URL, title, product ID, price, location, etc.). The app calls this API with search parameters (e.g. Utah Valley, rentals), normalizes the response into our schema, and saves to **SQLite**. For other sites we add Bright Data scrapers if available, or fall back to direct scraping later. See [Bright Data – Facebook Marketplace](https://brightdata.com/products/web-scraper/facebook/marketplace) and [Bright Data docs](https://docs.brightdata.com/api-reference/web-scraper-api/social-media-apis/facebook). **Rollout order:** 1) Facebook Marketplace (Bright Data) → 2) Zillow → 3) KSL → 4) Apartments.com.
+
+**GitHub Actions (how it works):** A workflow (e.g. `.github/workflows/run-pipeline.yml`) triggers on schedule and optionally on push. It checks out the repo, sets up Python, installs deps, runs `fetch.py` (Bright Data → SQLite), runs Ollama extraction for **new** listings only, runs `build_page.py` (SQLite → static HTML + run status), then commits and pushes the output to the Pages branch/folder. Secrets (Bright Data API key) are in GitHub Settings → Secrets. No local cron or manual push required.
 
 ---
 
 ## Target Data Sources (from research.md)
 
-1. **Zillow** – zillow.com (apartments + houses, daily updates).
-2. **KSL Real Estate** – homes.ksl.com (Utah-focused rentals).
-3. **Apartments.com** – apartments.com (apartments + some houses, strong filters).
-4. **Facebook Marketplace** – facebook.com/marketplace (local listings, private landlords, rooms/sublets; login may be required for scraping).
+**Rollout order:** We start with **Facebook Marketplace**, then add the others.
+
+1. **Facebook Marketplace** *(first)* – facebook.com/marketplace (local listings, private landlords, rooms/sublets). Data via **Bright Data API**.
+2. **Zillow** – zillow.com (apartments + houses, daily updates). Add in a later phase (Bright Data if available, else direct scraping).
+3. **KSL Real Estate** – homes.ksl.com (Utah-focused rentals). Add in a later phase.
+4. **Apartments.com** – apartments.com (apartments + some houses, strong filters). Add in a later phase.
 
 ---
 
-## API / feed options (research)
 
 Research into official or semi-official programmatic access for each of the four sites. **Summary:** None of the four offer a public consumer API to search or read rental listings. Scraping (or the AI-browser fallback) remains the practical approach for a personal skimmer; APIs/feeds below are mostly for publishers, partners, or researchers.
 
@@ -67,7 +71,7 @@ Research into official or semi-official programmatic access for each of the four
 - **No public API for searching or reading Marketplace listings** for general developers. The **Seller API / Item API** (Graph API) is for *publishing* and managing *your* listings (partnership/approval required), not for reading the full Marketplace catalog.
 - **Content Library API** – Meta provides a **Content Library and API** that can include **Facebook Marketplace** data (listings, etc.) for **eligible researchers**. Access is restricted to qualified academic or not-for-profit research institutions; applications are reviewed by ICPSR (e.g. 4–6 weeks). Data is typically analyzed in Meta’s designated environment (e.g. Virtual Data Enclave). Not intended for personal rental skimmers or commercial use.
 - **Syndication to Marketplace:** Large-scale rental syndication is possible via business partnerships (e.g. Business Extension Services Partner inquiry form); again, for *publishing* listings, not reading them.
-- **Implication for this project:** No viable API for a consumer to programmatically search Marketplace. Use scraping or the AI-browser fallback (e.g. Atlas) with a logged-in session; respect Meta’s terms and automation policies.
+- **Implication for this project:** We use **Bright Data’s Facebook Marketplace Scraper API** to pull listing data (no in-house scraping or login). Bright Data handles access; we consume the structured API response and normalize to our JSON schema.
 
 ### Summary table
 
@@ -76,7 +80,7 @@ Research into official or semi-official programmatic access for each of the four
 | Zillow              | No (legacy APIs gone)   | Yes (feed in, lead API out; publisher-only) | Scraping or AI browser            |
 | KSL Real Estate     | No                      | No official API; third-party RSS possible | Scraping or AI browser            |
 | Apartments.com      | No                      | Yes (OAuth API for your listings only)    | Scraping or AI browser            |
-| Facebook Marketplace| No                      | Seller API to publish; Content Library for research only | Scraping or AI browser            |
+| Facebook Marketplace| No                      | Seller API to publish; Content Library for research only | **Bright Data API** (this project) |
 
 *Sources: Zillow Group Developers, Apartments.com API docs, Meta for Developers (Marketplace, Content Library), third-party reporting on Zillow API discontinuations, FeedSpot/IFTTT for KSL RSS options. Last checked 2025.*
 
@@ -85,10 +89,10 @@ Research into official or semi-official programmatic access for each of the four
 ## Desired Features
 
 1. **Scheduled skimming**  
-   - Run on a schedule (every 12 hours) to fetch new/updated listings.
+   - **GitHub Actions** runs the pipeline on a schedule (e.g. every 12 hours) to fetch new/updated listings, run Ollama on new listings only, and update the webpage. No local cron or manual git push.
 
 2. **Multi-site support**  
-   - Support at least the top 4 sites (Zillow, KSL, Apartments.com, Facebook Marketplace); design so adding Rentler or others later is straightforward.
+   - Start with **Facebook Marketplace** (Bright Data API). Then add Zillow, KSL, Apartments.com; design so adding each new source is straightforward (Bright Data if available, else direct scraping).
 
 3. **Configurable search criteria**  
    - Location (cities/zip codes in Utah Valley), price range, bedrooms/bathrooms, property type (apartment, house, etc.), and optionally pet policy or keywords.
@@ -97,43 +101,99 @@ Research into official or semi-official programmatic access for each of the four
    - Detect the same listing across sites (e.g., by address or listing ID) to avoid duplicates and merge data when possible. This feature is not a priority.
 
 5. **Persistence**  
-   - Store listings in **JSON files** with first-seen and last-seen timestamps to track new vs. updated vs. removed.
+   - Store listings in **SQLite** (Python `sqlite3`) with first-seen and last-seen timestamps to track new vs. updated vs. removed.
 
 6. **New-listing alerts**  
    - Optional: notify when new listings match criteria (e.g., email or desktop notification). Primary “view” is the generated webpage.
 
-7. **Respectful scraping**  
-   - Honor robots.txt, use reasonable rate limits and delays, and follow each site’s terms of use. Prefer official APIs if available (e.g., some sites offer partner or RSS feeds).
+7. **Respectful data acquisition**  
+   - Use Bright Data API for supported sites (they handle compliance). For any direct scraping added later, honor robots.txt, rate limits, and terms of use.
 
 8. **Output and interaction**  
-   - **Webpage:** Static HTML (and optional CSS/JS) generated from JSON, hosted on GitHub (GitHub Pages). Updated after each scrape run.  
-   - **Interaction:** Run the app via **scripts** (e.g. scrape script, build-page script); no formal CLI or local server required.
+   - **Webpage:** Static HTML (and optional CSS/JS) generated from SQLite, hosted on GitHub (GitHub Pages). Updated after each workflow run. Include a **run status** indicator (last run time, success/failure, listing count) for simple observability from day one.  
+   - **Interaction:** Run the app via **scripts** (e.g. `fetch.py`, `build_page.py`); no formal CLI or local server required.
+
+---
+
+## Price filter and LLM extraction (Ollama)
+
+After the Bright Data API pulls in data, the app will:
+
+1. **Filter by price** – Keep only new or updated listings that match pre-set price criteria (e.g. **below $1,200**; configurable in config).
+2. **Ollama extraction only on new listings** – Run the LLM **only on listings that are new and within the parameters** (e.g. new + price < $1,200). Do not re-run Ollama on every listing every time; newly fetched listings that pass the filter get extracted, results stored in SQLite.
+3. **Prototype Ollama separately** – Before building the full pipeline, **prototype the Ollama extraction step in isolation**: a small script that takes sample listing text, calls Ollama, and validates output schema and latency. This avoids discovering the LLM is the bottleneck after the whole pipeline is built. Only then wire Ollama into the main pipeline.
+
+### Required extractions (first version)
+
+| Field | Purpose |
+|-------|--------|
+| **Washer / dryer** | Included in unit vs hookups only vs not mentioned. |
+| **Renter-paid fees** | Utilities, trash, internet, parking, pet rent, etc. that the renter must pay in addition to rent. |
+| **Availability / contract start** | When the unit is available or when the lease starts (date or “ASAP”, “March”, etc.). |
+
+### Additional extractions (in scope – include all)
+
+Include all of the following in the Ollama extraction schema (stored in SQLite):
+
+- **Pet policy** – Cats/dogs allowed, deposit, monthly pet rent, breed/weight limits.
+- **Parking** – Included, assigned, garage, street only, or extra cost.
+- **Lease length** – Month-to-month, 6 months, 12 months, or unspecified.
+- **Deposit** – Amount and whether refundable; any “last month” requirement.
+- **Application / admin fees** – One-time fees to apply or move in.
+- **Furnished vs unfurnished** – Fully furnished, partial, or unfurnished.
+- **Square footage** – If mentioned (helps compare value).
+- **Roommates / layout** – Entire place vs room in shared unit; number of roommates.
+- **Subletting** – Whether subletting is allowed (matters for students/short stays).
+- **Contact** – Landlord vs property manager; phone/email/message preference.
+- **Move-in incentives** – First month free, reduced deposit, waived fee.
+- **Amenities** – AC, dishwasher, storage, gym, pool, yard, laundry in building.
+- **Restrictions** – Non-smoking, student-only, no parties, credit check, etc.
+- **Location detail** – Neighborhood, cross streets, or “near BYU/UVU” if mentioned (when full address is not given).
+
+Output from Ollama is stored in SQLite (e.g. an `extracted` / `llm` column or related table per listing) and shown on the generated webpage. Pipeline: **Bright Data → SQLite → price filter (e.g. &lt; $1,200) → Ollama extraction (new listings only) → update SQLite → build_page (incl. run status).**
+
+---
+
+## Config schema (define before implementing)
+
+**Define the config schema explicitly in YAML or TOML before writing code.** Write out the full spec (file format, required and optional keys, types, defaults) and get it agreed; then implement against that spec. Suggested contents:
+
+- **Search / sources:** Location (cities, zip codes, Utah Valley), price max (e.g. 1200), price min (optional), bedrooms/bathrooms (optional), category/keywords for Bright Data.
+- **Bright Data:** Dataset ID, endpoint, any source-specific options (maps to API params).
+- **Ollama:** Model name, API base URL (if not default local), timeout; which fields to extract (or “all”).
+- **Paths:** SQLite file path, output directory for static site (e.g. `docs/` or `gh-pages`), config file path.
+- **Run status:** Where to write last run timestamp and outcome (e.g. SQLite table or small status file) for the webpage indicator.
+
+Example shape (YAML): `location`, `price_max`, `price_min`, `bright_data.dataset_id`, `ollama.model`, `paths.db`, `paths.output`, etc. No implementation of config loading until this spec is written and committed (e.g. in `docs/config_schema.md` or in the repo root as `config.schema.yaml` / `config.schema.toml`).
 
 ---
 
 ## Implementation Outline
 
-### Phase 1: Foundation
+### Phase 0: Config schema and Ollama prototype (before main pipeline)
 
-- **Stack:** Python, `requests` + BeautifulSoup, JSON files for storage (see Chosen tech stack).
-- **Config:** Define search criteria in a config file (cities, price range, beds/baths, etc.).
-- **One-site scraper:** Implement a single scraper for one of the four sites (e.g., Zillow or KSL) that:
-  - Builds search URLs from config.
-  - Fetches listing list and key fields (title, link, price, beds, baths, address, source).
-  - Saves to JSON with first-seen/last-seen and source.
-- **Deduplication (basic):** Normalize address or external ID per listing; mark duplicates so the same property isn’t counted twice.
+- **Config schema:** Write the full **config spec** (YAML or TOML) as in "Config schema (define before implementing)". Commit it. Do not implement config loading until this is done.
+- **Ollama prototype:** Build a **standalone script** that takes sample listing text, calls Ollama with the extraction prompt, validates response shape and latency. Confirm the LLM step is viable before wiring into the full pipeline.
 
-### Phase 2: Multi-site and scheduling
+### Phase 1: Facebook Marketplace via Bright Data (foundation)
 
-- **Scrapers for the other three sites:** Reuse the same JSON schema and add scrapers for KSL, Apartments.com, and Facebook Marketplace. Share parsing and persistence logic where possible. (Note: Facebook Marketplace may require authenticated sessions or browser automation; handle separately if needed.)
-- **Scheduler:** Use **cron** (or launchd on macOS) to run the scrape script on a set interval (e.g., every 12 hours).
-- **New vs. updated:** On each run, compare with stored JSON; tag “new” for first-seen in this run and “updated” if details changed.
+- **Stack:** Python, Bright Data API client, **SQLite** (python `sqlite3`) for storage. Config loaded from the agreed schema.
+- **Bright Data integration:** Implement `fetch.py` that reads config, calls Bright Data's Facebook Marketplace Scraper API, normalizes to common schema (title, link, price, beds, baths, address, source, first-seen, last-seen), and **saves/merges into SQLite**. Deduplication by listing URL or product ID.
+- **Run status:** Record each run's timestamp and outcome (success/failure, listing count) in SQLite or a small status file for the webpage.
+- **Webpage:** Implement `build_page.py` to read from **SQLite** and generate static HTML. **Include the run status indicator** (last run time, success/fail, listing count) on the page. End-to-end: Bright Data to SQLite to build_page with run status.
 
-### Phase 3: Webpage and scripts
+### Phase 2: Ollama for new listings only, then expand sites and GitHub Actions
 
-- **Generate static webpage:** A script reads the listings JSON and generates a static HTML page (and optional CSS/JS) that displays listings, sorted/filtered by user preference. The page is suitable for GitHub Pages (no server-side logic).
-- **GitHub hosting:** After each run (or as a separate step), commit and push the generated page to the repo so GitHub Pages serves it (e.g. `gh-pages` branch, or `docs/` with “GitHub Pages from docs/” enabled, or a dedicated repo).
-- **Scripts:** Entry points such as `python scrape.py` (run scrapers, update JSON), `python build_page.py` (generate HTML from JSON); optionally a single script that does both. No formal CLI framework; invoke via shell/cron.
+- **Ollama step:** Run Ollama extraction **only on new listings** that match the price/parameter filter. Store extracted fields in SQLite.
+- **Add Zillow, KSL, Apartments.com:** For each site, use Bright Data if available or add a direct scraper. Reuse the same SQLite schema; tag each listing with `source`.
+- **Scheduler:** Use **GitHub Actions** (not local cron). Workflow: checkout, setup Python, install deps, run `fetch.py`, run Ollama for new listings, run `build_page.py`, commit and push to the branch/folder that serves GitHub Pages. Use **GitHub Secrets** for Bright Data API key. Schedule (e.g. every 12 hours) and optionally on push.
+- **New vs. updated:** On each run, compare with SQLite; tag new vs updated.
+
+### Phase 3: Webpage and observability
+
+- **Generate static webpage:** `build_page.py` reads SQLite and generates static HTML that displays listings (with extracted fields), sorted/filtered by user preference, and the **run status** indicator (last run, success/failure, listing count).
+- **GitHub hosting:** The workflow commits and pushes the generated files; no manual push. GitHub Pages serves from the chosen branch/folder.
+- **Scripts:** `python fetch.py`, `python build_page.py`; run locally or via GitHub Actions.
 - **Optional alerts:** If desired, add email or other notification when new listings appear; not required for MVP.
 
 ### Phase 4: Robustness and polish
@@ -144,18 +204,25 @@ Research into official or semi-official programmatic access for each of the four
 
 ---
 
+## Notes for future features
+
+- **Drive time to a central location:** Use the **Google Distance Matrix API** (or similar) to calculate drive time from each listing’s address to a user-defined central point (e.g. work, campus, or a favorite neighborhood). Store drive time or distance in the listing data and show it on the webpage so users can sort or filter by commute. Requires a configurable “origin” address and a Google API key; handle missing or partial addresses gracefully.
+
+---
+
 ## Deliverables (summary)
 
 | Item | Description |
 |------|-------------|
 | Research | research.md – top 4 rental sites for Utah Valley (done). |
 | Plan | plan.md – this high-level plan and feature set. |
-| Config | Search criteria (location, price, beds, etc.) in a config file. |
-| Scrapers | One module per site (Zillow, KSL, Apartments.com, Facebook Marketplace) with shared logic; output to JSON. |
-| Storage | JSON files with listings, timestamps, and source. |
-| Scheduler | Cron (or launchd) running the scrape script on a schedule. |
-| Webpage | Static HTML (and optional CSS/JS) generated from JSON, hosted on GitHub (GitHub Pages). |
-| Scripts | `scrape.py` (and/or `build_page.py`) to run via shell/cron; no formal CLI or local server. |
+| Config | **Config schema** (YAML/TOML) defined and committed before implementation; search criteria, price filter, Bright Data params, Ollama settings, paths. |
+| Data acquisition | **Bright Data API** for Facebook Marketplace first; then Zillow, KSL, Apartments.com. Output to **SQLite**. |
+| Storage | **SQLite** (python `sqlite3`) with listings, timestamps, source, and extracted (LLM) fields. |
+| Scheduler | **GitHub Actions** workflow (schedule + optional push); credentials via GitHub Secrets. |
+| Webpage | Static HTML generated from SQLite, hosted on GitHub Pages; includes **run status** indicator (last run, success/fail, listing count). |
+| Ollama | Prototype extraction **separately** first; then run **only on new listings** within parameters. |
+| Scripts | `fetch.py` (Bright Data → SQLite), `build_page.py` (SQLite → HTML + run status); run via GitHub Actions or locally. |
 | Alerts | Optional: notifications for new listings; not required for MVP. |
 
 ---
@@ -184,9 +251,9 @@ If authentication or anti-bot measures make traditional scraping impractical (e.
 
 ## Risks and considerations
 
-- **Terms of use:** Each site may restrict scraping; implement conservatively and switch to APIs/feeds if available. Facebook Marketplace in particular has strict anti-scraping policies and typically requires login.
-- **Site changes:** Listing page structure can change; design parsers to be easy to update and add logging for parse failures.
-- **Rate limiting:** Use delays and polite concurrency to avoid blocks or bans.
-- **Facebook Marketplace:** May require authenticated sessions or browser automation (e.g., Playwright); treat as a separate integration path if needed.
+- **Bright Data:** Paid service; requires API credentials. In GitHub Actions, use **GitHub Secrets** (e.g. `BRIGHTDATA_API_KEY`); never commit keys. Bright Data handles compliance for their scrapers; we only consume the API response.
+- **Terms of use:** For sites we add via direct scraping later, honor robots.txt and rate limits. Facebook Marketplace is covered by Bright Data for this project.
+- **Site changes:** Bright Data may update their API response format; our normalizer should tolerate optional fields. For direct scrapers added later, design parsers to be easy to update and add logging for parse failures.
+- **Rate limiting:** Bright Data has its own concurrency and limits; follow their docs. For any direct scraping, use delays and polite concurrency.
 
-This plan is intended to be implemented incrementally: get one site working end-to-end (scrape → JSON → webpage), then add the other sites, then cron and GitHub hosting.
+This plan is intended to be implemented incrementally: **config schema + Ollama prototype** first; then **Facebook Marketplace via Bright Data** → SQLite → webpage with run status; then Ollama for new listings only, other sites, and **GitHub Actions** (replacing local cron and manual push).
