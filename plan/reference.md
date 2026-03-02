@@ -114,4 +114,4 @@ If authentication or anti-bot measures make scraping impractical, use an **AI br
 - **Claude API:** Use **GitHub Secrets** (e.g. `ANTHROPIC_API_KEY`); never commit. Runs on any GitHub-hosted runner.
 - **Run status on failure:** If a step fails, workflow can still run `build_page.py` with existing data and record "last run: failed" for observability.
 
-Incremental order: **config schema + Claude prototype** → **Facebook Marketplace → SQLite → webpage** → **Claude for new listings, other sites, GitHub Actions**.
+Incremental order: **Phase 0** (Bright Data → SQLite) → **Phase 1** (run status + webpage) → **Phase 2** (config schema + Claude prototype) → **Phase 3** (Claude for new listings, other sites, GitHub Actions) → **Phase 4** (webpage polish) → **Phase 5** (robustness).

@@ -1,41 +1,43 @@
-# Phase 0: Config schema and Claude API prototype (before main pipeline)
+# Phase 0: Bright Data → SQLite (foundation)
 
-Complete this phase before building the full pipeline. Ensures config is defined and the LLM extraction step is viable.
+Build the data pipeline: Bright Data Facebook Marketplace API → SQLite with deduplication. Single source only; no run status or webpage yet.
 
 ---
 
 ## Detailed steps
 
-### 1. Config schema
+### 1. Project setup
 
-- Write the full **config spec** in TOML (see [reference.md#config-schema](reference.md#config-schema-define-before-implementing)).
-- Include: search (location, price_max, price_min, bedrooms, bathrooms, category), bright_data (dataset_id, options), claude (model, timeout_seconds, extract_fields), paths (db, output, config_file), dedup (normalize_address, optional suffix mappings), run_status (store, optional status_file).
-- Commit the schema file to the repo (e.g. `config_schema.toml` in repo root or as documented in reference).
-- **Do not** implement config loading or parsing yet; this phase is spec-only for config.
+- Python project with dependency list (e.g. `requirements.txt`: `requests`, stdlib `sqlite3`). For this phase, use **env vars** and a **minimal config** (e.g. DB path, optional search/location params); the full config schema (TOML) is defined in [phase-2.md](phase-2.md).
+- Ensure `.env` and secrets are not committed; document that Bright Data API key comes from env (e.g. `BRIGHTDATA_API_KEY`).
 
-### 2. Claude API prototype
+### 2. SQLite schema and deduplication
 
-- Build a **standalone script** (e.g. `scripts/extract_listing_prototype.py` or similar) that:
-  - Takes **sample listing text** as input (from a file or hardcoded string; 1–3 example listings).
-  - Calls the **Claude API** with a fixed prompt that requests structured extraction for the fields in [features.md](features.md) (washer/dryer, renter-paid fees, availability, pet policy, parking, lease length, deposit, etc.).
-  - Parses the API response and validates that the **output shape** matches the expected schema (e.g. required keys present, types reasonable).
-  - Measures **latency** (time from request to parsed response) and logs or prints it.
-- Use API key from env (e.g. `ANTHROPIC_API_KEY`); do not hardcode.
-- Confirm the script runs successfully against the Claude API and that response format is stable enough to rely on in the pipeline.
+- Create the **listings** table per [reference.md#deduplication-and-sqlite-schema](reference.md#deduplication-and-sqlite-schema): `id`, `source`, `source_listing_id`, `normalized_address`, `address_raw`, `link`, `title`, `price`, `beds`, `baths`, `first_seen`, `last_seen`, `extracted` (TEXT/JSON), optional `canonical_listing_id`. UNIQUE constraint on `(source, source_listing_id)`.
+- Implement **address normalization** (lowercase, strip punctuation, normalize street suffixes) and **upsert logic**: for each listing from the API, compute `source_listing_id` (from product_id or hash of link) and `normalized_address`; INSERT or REPLACE / ON CONFLICT DO UPDATE so one row per (source, source_listing_id). Set `first_seen` on insert, `last_seen` on every update.
+- Optional for Phase 0: cross-source merge (canonical_listing_id); at minimum, no duplicate rows for the same (source, source_listing_id).
 
-### 3. Document findings
+### 3. Bright Data integration (`fetch.py`)
 
-- Note the Claude model name and any prompt constraints (length, format) for use in Phase 2.
-- If latency or rate limits are a concern, document mitigations (e.g. batch size, timeout) for the main pipeline.
+- Implement `fetch.py` that:
+  - Reads DB path and Bright Data params from env or a minimal config (location, category/keyword, etc.).
+  - Calls the **Bright Data Facebook Marketplace Scraper API** with those parameters.
+  - Normalizes each listing to the common schema (title, link, price, beds, baths, address_raw, source = `facebook_marketplace`, product_id or link hash for source_listing_id).
+  - Computes `normalized_address` for each listing.
+  - Opens or creates the SQLite DB, runs upserts into **listings** only (no run_status in this phase).
+- Handle API errors and timeouts; log failures.
+
+### 4. Local test
+
+- Run `fetch.py` with a valid Bright Data API key and DB path. Verify: DB contains listings with no duplicate (source, source_listing_id); first_seen and last_seen are set correctly.
 
 ---
 
 ## Requirements to pass before moving to Phase 1
 
-- [ ] **Config schema** is written in TOML and committed to the repo; all sections (search, bright_data, claude, paths, dedup, run_status) are specified with types/defaults or comments.
-- [ ] **Claude prototype script** exists, runs against sample listing text, and calls the Claude API successfully.
-- [ ] **Output validation** passes: the script validates that the API response conforms to the extraction schema (required fields present; no crash on parse).
-- [ ] **Latency** has been measured and recorded; team accepts that the LLM step is viable for the intended run frequency (e.g. every 12 hours with N new listings per run).
-- [ ] **No config loading** has been implemented yet; config is spec-only.
+- [ ] **SQLite schema** is created with listings table (id, source, source_listing_id, normalized_address, address_raw, link, title, price, beds, baths, first_seen, last_seen, extracted) and UNIQUE(source, source_listing_id).
+- [ ] **Upsert** ensures one row per (source, source_listing_id); first_seen and last_seen are set correctly; normalized_address is populated when address is available.
+- [ ] **fetch.py** successfully calls Bright Data API (Facebook Marketplace), normalizes response, and upserts into SQLite only.
+- [ ] **End-to-end** (fetch only) runs locally and produces a populated SQLite DB with at least one listing.
 
 When all checkboxes are satisfied, proceed to [phase-1.md](phase-1.md).

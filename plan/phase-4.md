@@ -1,41 +1,45 @@
-# Phase 4: Robustness and polish
+# Phase 4: Webpage and observability
 
-Harden the pipeline: error handling, logging, and optional reporting. No new features required for MVP.
+Polish the generated webpage: show extracted fields, sorting/filtering, and run status. Ensure GitHub hosting is solid and scripts are runnable locally or via Actions.
 
 ---
 
 ## Detailed steps
 
-### 1. Error handling and logging
+### 1. Listing display with extracted fields
 
-- In **fetch.py**: catch API errors (timeouts, non-2xx responses, invalid JSON). Log failures with site/source name and error message; do not crash the entire run if one source fails. Optional: **retry with backoff** (e.g. 1 retry after 5 seconds) for transient errors.
-- In **Claude extraction** step: catch API errors and timeouts; log which listing failed; skip that listing or mark “extraction failed” so the pipeline can continue. Do not lose existing SQLite data.
-- Ensure **run_status** can record “partial” or “failed” (e.g. fetch failed, or extract failed) so the webpage still shows last run and outcome.
+- Update `build_page.py` so the generated HTML displays **Claude-extracted fields** (washer/dryer, renter-paid fees, availability, pet policy, parking, lease length, deposit, amenities, etc.) for each listing when present. Use the **extracted** JSON (or columns) from the listings table.
+- Format for readability (e.g. labels, line breaks, or a small table per listing). Handle missing extracted data gracefully (show "—" or hide section).
 
-### 2. Logging
+### 2. Sorting and filtering (optional)
 
-- Add structured or simple **logging** (e.g. Python `logging` module) for: start/end of fetch per source, number of listings fetched, number of new vs updated, Claude extraction start/end and count, build_page start/end, any errors. Log to stdout so GitHub Actions captures it in the workflow log.
+- If config or a simple convention supports it, allow **sorting** (e.g. by price, first_seen, last_seen) and **filtering** (e.g. by price range, source, beds) in the generated page. This can be client-side (JavaScript) or pre-computed in the HTML (e.g. separate sections). Minimum: list all listings; preferred: sort by date or price.
 
-### 3. Legal and compliance
+### 3. Run status indicator
 
-- **Document** in README or docs: we use Bright Data for Facebook Marketplace (they handle compliance); for any direct scraping added later, we will honor robots.txt and rate limits. No implementation required for Bright Data–only setup.
+- Ensure the **run status** is clearly visible on the page: **last run time** (human-readable), **success/failure**, and **listing count** (or "N new, M updated"). If the last run failed, show "Last run: failed" so the user has observability without checking Actions logs.
 
-### 4. Optional: listing diff report
+### 4. GitHub hosting
 
-- If useful, add a **lightweight report** (e.g. markdown or text file) per run: “N new, M updated, K removed” or a short list of new/updated listing titles. This can be written to the repo (e.g. on the data branch) or only to logs. Optional for Phase 4 pass.
+- Confirm the workflow **commits and pushes** the generated files to the branch or folder that **GitHub Pages** uses (e.g. `docs/` on main or `gh-pages` branch). No manual push should be required for the site to update after a run.
+- Document in README or plan how to enable Pages (Settings → Pages → source branch/folder).
 
-### 5. Documentation
+### 5. Scripts and local run
 
-- README (or plan docs) should describe: how to run locally, how to set GitHub Secrets, what the workflow does, where the SQLite file lives (data branch), and how to enable GitHub Pages.
+- Document that `python fetch.py` and `python build_page.py` can be run **locally** (with env vars for API keys and config pointing to local paths). Same scripts are used in GitHub Actions. Optional: single entry script that runs fetch → extract → build_page for local testing.
+
+### 6. Optional: new-listing alerts
+
+- If desired, add a minimal **alert** (e.g. email or desktop notification) when new listings appear. Not required to pass Phase 4.
 
 ---
 
-## Requirements to pass before considering Phase 4 complete
+## Requirements to pass before moving to Phase 5
 
-- [ ] **Error handling** in fetch: API errors are caught and logged; pipeline does not lose existing DB data when a source fails. At least one retry or clear failure path is implemented.
-- [ ] **Error handling** in Claude step: failures are caught and logged; pipeline continues (skip listing or mark failed); run_status can reflect failure.
-- [ ] **Logging** is in place for fetch, extract, and build_page (start/end, counts, errors); visible in GitHub Actions logs when run in CI.
-- [ ] **Documentation** covers: local run, GitHub Secrets, workflow behavior, data branch, and GitHub Pages setup.
-- [ ] **Run status on failure:** If any step fails, the workflow still updates run_status (e.g. “last run: failed”) and optionally runs build_page with existing data so the page shows current state and observability.
+- [ ] **Extracted fields** are shown on the webpage for each listing (when available); missing data is handled without errors.
+- [ ] **Run status** is visible on the page (last run time, success/failure, listing count or equivalent).
+- [ ] **Sorting or filtering** is available (at least one of: sort by price, date, or filter by source/price). Prefer sort by date or price.
+- [ ] **GitHub Pages** is configured and the site updates automatically after each workflow run; no manual push needed.
+- [ ] **Scripts** are documented for local use (fetch.py, build_page.py, env vars, config).
 
-When all checkboxes are satisfied, Phase 4 is complete. The MVP is done; future work (more sites, alerts, drive-time feature) can follow from [reference.md](reference.md) and [features.md](features.md).
+When all checkboxes are satisfied, proceed to [phase-5.md](phase-5.md).
