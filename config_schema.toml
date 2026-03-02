@@ -1,0 +1,49 @@
+# Utah Valley Rental Skimmer – config schema (TOML)
+# Load this schema; API keys come from env / GitHub Secrets (e.g. BRIGHTDATA_API_KEY, ANTHROPIC_API_KEY), not from this file.
+
+[search]
+# Target area and listing filters (maps to Bright Data and in-app price filter)
+location = "Provo"                    # string: city name, or comma-separated "Provo, Orem"
+location_state = "UT"                 # string: state code
+price_max = 1200                      # integer: max rent (USD); listings above this are excluded
+price_min = 0                         # integer, optional: min rent (USD); 0 = no minimum
+bedrooms_min = 0                      # integer, optional: minimum bedrooms; 0 = any
+bedrooms_max = 0                      # integer, optional: maximum bedrooms; 0 = any
+bathrooms_min = 0                     # integer, optional: minimum bathrooms; 0 = any
+category = "Apartment"                # string: Bright Data / Marketplace category or keyword (e.g. "Apartment", "House", "rentals")
+
+[bright_data]
+# Bright Data API (Facebook Marketplace scraper)
+dataset_id = "gd_lvt9iwuh6fbcwmx1a"   # string: Bright Data dataset ID for the scraper
+# endpoint is typically fixed; override only if needed
+# endpoint = "https://api.brightdata.com/datasets/v3/trigger"
+discover_by = "keyword"               # string: e.g. "keyword"
+notify = false                         # boolean: wait for async completion notification
+include_errors = true                 # boolean: include errors in response
+
+[claude]
+# Claude API extraction (key from env ANTHROPIC_API_KEY or GitHub Secret)
+model = "claude-3-5-sonnet-20241022"  # string: model name
+timeout_seconds = 60                  # integer: request timeout
+extract_fields = "all"                 # string: "all" or comma-separated list of field names to extract
+
+[paths]
+# File system paths (workflow: DB lives on data/ branch; output is for Pages)
+db = "listings.db"                    # string: SQLite filename (path relative to repo when on data/ branch)
+output = "docs"                       # string: directory for generated static site ("docs" or build to gh-pages branch)
+config_file = "config.toml"           # string, optional: path to this config (for overrides)
+
+[dedup]
+# Deduplication: listings table uses (source, source_listing_id) + normalized_address (see plan: Deduplication and SQLite schema)
+# Optional: address normalization for cross-source matching (lowercase, strip punctuation, map suffixes)
+normalize_address = true              # boolean: compute normalized_address from address_raw for cross-source dedup
+# Optional suffix mappings (e.g. "st" -> "street"); empty = use default mappings
+# suffix_street = "street"
+# suffix_avenue = "avenue"
+# suffix_dr = "drive"
+
+[run_status]
+# Where to record last run for the webpage indicator
+store = "sqlite"                      # string: "sqlite" (use listings DB) or "file"
+# if store = "file":
+# status_file = "run_status.json"    # string: path to small JSON with last_run_ts, success, listing_count
