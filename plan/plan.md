@@ -9,6 +9,8 @@ Application that regularly skims online rental markets in Utah Valley to identif
 - **Input:** Target area = Utah Valley (e.g., Provo, Orem, and nearby cities).
 - **Output:** A webpage of rental opportunities from the top listing sites, sorted by user preference, with filtering. The page is hosted on **GitHub Pages** and updated after each **GitHub Actions** workflow run.
 
+**One-line summary:** Webpage of rental listings from Bright Data (Facebook Marketplace first, then Zillow/KSL/Apartments.com), filtered by price, enriched by Claude API (new listings only), stored in SQLite on the **data/** branch, updated by **GitHub Actions**, and served via **GitHub Pages** with a run status indicator.
+
 ---
 
 ## Chosen tech stack
@@ -38,17 +40,19 @@ Application that regularly skims online rental markets in Utah Valley to identif
 | **Phase 3** | Webpage and observability | Full listing display with extracted fields, run status, GitHub hosting. |
 | **Phase 4** | Robustness and polish | Error handling, logging, optional diff report. |
 
-Each phase has a dedicated doc with **detailed steps** and **requirements that must pass** before moving on.
-
-- [phase-0.md](phase-0.md) – Config schema and Claude API prototype
-- [phase-1.md](phase-1.md) – Facebook Marketplace via Bright Data (foundation)
-- [phase-2.md](phase-2.md) – Claude extraction, multi-site, GitHub Actions
-- [phase-3.md](phase-3.md) – Webpage and observability
-- [phase-4.md](phase-4.md) – Robustness and polish
+**Implementation order:** Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4. Each phase doc has **detailed steps** and **requirements that must pass** before moving on.
 
 ---
 
-## Other docs
+## Doc index (plan directory)
 
-- [features.md](features.md) – All desired features and price/LLM extraction behavior.
-- [reference.md](reference.md) – Target data sources, deduplication and SQLite schema, config schema, deliverables, fallback (AI browser), risks.
+| Doc | Purpose |
+|-----|--------|
+| [plan.md](plan.md) | **This file.** High-level plan: goal, tech stack, phase summary. |
+| [features.md](features.md) | All desired features; price filter and Claude extraction behavior; extraction field list. |
+| [reference.md](reference.md) | Target data sources, deduplication and SQLite schema, config schema, deliverables, fallback (AI browser), risks. |
+| [phase-0.md](phase-0.md) | Phase 0: Config schema (TOML) + Claude API prototype; steps and exit criteria. |
+| [phase-1.md](phase-1.md) | Phase 1: Foundation – Bright Data → SQLite → run status → webpage. |
+| [phase-2.md](phase-2.md) | Phase 2: Claude for new listings, multi-site, GitHub Actions, data branch. |
+| [phase-3.md](phase-3.md) | Phase 3: Webpage and observability (extracted fields, run status, Pages). |
+| [phase-4.md](phase-4.md) | Phase 4: Robustness and polish (errors, logging, docs). |
