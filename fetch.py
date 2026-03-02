@@ -29,10 +29,12 @@ LISTINGS_DB = "LISTINGS_DB"
 BRIGHTDATA_DATASET_ID = "BRIGHTDATA_DATASET_ID"
 BRIGHTDATA_KEYWORD = "BRIGHTDATA_KEYWORD"
 BRIGHTDATA_CITY = "BRIGHTDATA_CITY"
+BRIGHTDATA_RADIUS_MILES = "BRIGHTDATA_RADIUS_MILES"
 
 DEFAULT_DATASET_ID = "gd_lvt9iwuh6fbcwmx1a"
 DEFAULT_KEYWORD = "Apartment"
-DEFAULT_CITY = "Provo"
+DEFAULT_CITY = "Provo, UT"
+DEFAULT_RADIUS_MILES = 20
 DEFAULT_DB = "listings.db"
 
 TRIGGER_URL = "https://api.brightdata.com/datasets/v3/trigger"
@@ -168,11 +170,27 @@ def normalize_record(record: dict) -> dict:
     }
 
 
-def trigger_collection(api_key: str, dataset_id: str, keyword: str, city: str) -> str | None:
-    """Start Bright Data collection; return snapshot_id or None on failure."""
+def trigger_collection(
+    api_key: str,
+    dataset_id: str,
+    keyword: str,
+    city: str,
+    radius_miles: int = DEFAULT_RADIUS_MILES,
+) -> str | None:
+    """Start Bright Data collection; return snapshot_id or None on failure.
+    Use city like 'Provo, UT' and radius_miles to restrict to ~20 miles around Provo, UT.
+    """
     url = f"{TRIGGER_URL}?dataset_id={dataset_id}&notify=false&include_errors=true&type=discover_new&discover_by=keyword"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"input": [{"keyword": keyword, "city": city, "date_listed": ""}]}
+    input_item: dict[str, object] = {
+        "keyword": keyword,
+        "city": city,
+        "radius": radius_miles,
+        "date_listed": "",
+        "state": "UT",
+        "country": "US",
+    }
+    payload = {"input": [input_item]}
     try:
         r = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT_SEC)
         if not r.ok:
@@ -260,9 +278,12 @@ def run_fetch(
     dataset_id: str,
     keyword: str,
     city: str,
+    radius_miles: int = DEFAULT_RADIUS_MILES,
 ) -> int:
     """Trigger collection, wait for ready, download, upsert. Returns count of listings upserted."""
-    snapshot_id = trigger_collection(api_key, dataset_id, keyword, city)
+    snapshot_id = trigger_collection(
+        api_key, dataset_id, keyword, city, radius_miles=radius_miles
+    )
     if not snapshot_id:
         return 0
     log.info("Triggered snapshot_id=%s", snapshot_id)
@@ -362,8 +383,13 @@ def main() -> None:
     dataset_id = _env(BRIGHTDATA_DATASET_ID, DEFAULT_DATASET_ID)
     keyword = _env(BRIGHTDATA_KEYWORD, DEFAULT_KEYWORD)
     city = _env(BRIGHTDATA_CITY, DEFAULT_CITY)
+    radius_str = _env(BRIGHTDATA_RADIUS_MILES, str(DEFAULT_RADIUS_MILES))
+    try:
+        radius_miles = int(radius_str)
+    except ValueError:
+        radius_miles = DEFAULT_RADIUS_MILES
 
-    n = run_fetch(db_path, api_key, dataset_id, keyword, city)
+    n = run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles)
     log.info("Upserted %d listings into %s", n, db_path)
 
 

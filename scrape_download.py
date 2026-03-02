@@ -53,7 +53,7 @@ else:
     print(f"Using latest snapshot_id from history: {snapshot_id}")
 
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
-SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/snapshots"
+SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
 
 REQUEST_TIMEOUT_SEC = 60
 
@@ -86,7 +86,7 @@ if status != "ready":
 
 # 2. Download snapshot now that it's ready
 download_resp = requests.get(
-    f"{SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}/download",
+    f"{SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}",
     headers=headers,
     params={"format": "json"},
     proxies=proxies,

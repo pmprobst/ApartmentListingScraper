@@ -18,7 +18,14 @@ headers = {
 
 payload = {
     "input": [
-        {"keyword": "Apartment", "city": "Provo", "radius": 20, "date_listed": ""}
+        {
+            "keyword": "Apartment",
+            "city": "Provo, UT",
+            "radius": 20,
+            "date_listed": "",
+            "state": "UT",
+            "country": "US",
+        }
     ],
 }
 

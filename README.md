@@ -17,9 +17,9 @@ Skims online rental markets in Utah Valley (Bright Data → SQLite → webpage).
 
 ## Environment variables
 
-- **`BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY`** (required for fetch): Your Bright Data API key for Facebook Marketplace. Do not commit this; use a `.env` file locally or GitHub Secrets in CI. The script also accepts **`BRIGHTDATA_API_KEY`** as a fallback. **Setup:** [docs/BRIGHTDATA_API_KEY_SETUP.md](docs/BRIGHTDATA_API_KEY_SETUP.md) has step-by-step instructions for creating the correct API key on the Bright Data site.
+- **`BRIGHT_DATA_API_KEY`** (required for fetch): Your Bright Data API key for Facebook Marketplace. Do not commit this; use a `.env` file locally or GitHub Secrets in CI. The script also accepts 
 - **`LISTINGS_DB`** (optional): Path to the SQLite database file. Default: `listings.db`.
-- **`BRIGHTDATA_DATASET_ID`**, **`BRIGHTDATA_KEYWORD`**, **`BRIGHTDATA_CITY`** (optional): Bright Data Facebook Marketplace params. Defaults: dataset `gd_lvt9iwuh6fbcwmx1a`, keyword `Apartment`, city `Provo`. Used by `fetch.py`.
+- **`BRIGHTDATA_DATASET_ID`**, **`BRIGHTDATA_KEYWORD`**, **`BRIGHTDATA_CITY`**, **`BRIGHTDATA_RADIUS_MILES`** (optional): Bright Data Facebook Marketplace params. Defaults: dataset `gd_lvt9iwuh6fbcwmx1a`, keyword `Apartment`, city `Provo, UT`, radius `20` miles. Used by `fetch.py` to restrict listings to ~20 miles around Provo, UT (and US-only).
 
 **Do not commit `.env` or any file containing API keys.** The `.env` file is gitignored.
 

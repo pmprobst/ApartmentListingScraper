@@ -20,6 +20,7 @@ from fetch import (
     DEFAULT_DATASET_ID,
     DEFAULT_DB,
     DEFAULT_KEYWORD,
+    DEFAULT_RADIUS_MILES,
     LISTINGS_DB,
     run_fetch,
     run_fetch_dry_run,
@@ -44,7 +45,12 @@ def run_fetch_step(dry_run: bool) -> str:
         dataset_id = _env("BRIGHTDATA_DATASET_ID", DEFAULT_DATASET_ID)
         keyword = _env("BRIGHTDATA_KEYWORD", DEFAULT_KEYWORD)
         city = _env("BRIGHTDATA_CITY", DEFAULT_CITY)
-        run_fetch(db_path, api_key, dataset_id, keyword, city)
+        radius_str = _env("BRIGHTDATA_RADIUS_MILES", str(DEFAULT_RADIUS_MILES))
+        try:
+            radius_miles = int(radius_str)
+        except ValueError:
+            radius_miles = DEFAULT_RADIUS_MILES
+        run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles)
     return db_path
 
 
