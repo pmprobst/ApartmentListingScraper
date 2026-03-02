@@ -8,7 +8,7 @@ Add run status tracking and webpage generation. Build on Phase 0: fetch.py will 
 
 ### 1. Run status
 
-- Add a **run_status** table or small status store (e.g. in the same SQLite DB: table with last run timestamp, success/failure, listing count). After each run of `fetch.py`, record: **last run timestamp**, **success/failure**, **listing count** (or similar). This will be read by `build_page.py` for the webpage indicator.
+- Add a **run_status** table or small status store (e.g. in the same SQLite DB: table with last run timestamp, success/failure, total listing count, **N new**, **M updated**). After each run of `fetch.py`, record these values. They will be read by `build_page.py` for the webpage indicator (see [features.md](features.md) §8).
 - Update **fetch.py** from Phase 0 so it writes to **run_status** after each run (timestamp, success, count).
 
 ### 2. Webpage generation (`build_page.py`)
@@ -16,7 +16,7 @@ Add run status tracking and webpage generation. Build on Phase 0: fetch.py will 
 - Implement `build_page.py` that:
   - Reads DB path (and optional output path) from env or minimal config.
   - Opens the SQLite DB, reads **listings** (e.g. all rows or those with last_seen in last N days) and **run_status**.
-  - Generates **static HTML** (and optional CSS/JS) that lists the listings (title, link, price, beds, baths, address, etc.) and displays the **run status** (last run time, success/failure, listing count).
+  - Generates **static HTML** (and optional CSS/JS) that lists the listings (title, link, price, beds, baths, address, etc.) and displays the **run status** (last run time, success/failure, total count, N new, M updated per [features.md](features.md)).
   - Writes output to the configured directory (e.g. `docs/` for GitHub Pages).
 - Output must be static (no server-side logic) so GitHub Pages can serve it.
 
@@ -28,7 +28,7 @@ Add run status tracking and webpage generation. Build on Phase 0: fetch.py will 
 
 ## Requirements to pass before moving to Phase 2
 
-- [ ] **run_status** is stored (SQLite table or file) and updated by fetch.py after each run (timestamp, success/failure, listing count).
+- [ ] **run_status** is stored (SQLite table or file) and updated by fetch.py after each run (timestamp, success/failure, total count, N new, M updated).
 - [ ] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list and run status indicator.
 - [ ] **End-to-end** (fetch → build_page) runs locally and produces a valid HTML page with at least one listing and run status visible.
 

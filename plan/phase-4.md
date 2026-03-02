@@ -17,7 +17,7 @@ Polish the generated webpage: show extracted fields, sorting/filtering, and run 
 
 ### 3. Run status indicator
 
-- Ensure the **run status** is clearly visible on the page: **last run time** (human-readable), **success/failure**, and **listing count** (or "N new, M updated"). If the last run failed, show "Last run: failed" so the user has observability without checking Actions logs.
+- Ensure the **run status** is clearly visible on the page: **last run time** (human-readable), **success/failure**, **total listing count**, and **N new, M updated** (required per [features.md](features.md)). If the last run failed, show "Last run: failed" so the user has observability without checking Actions logs.
 
 ### 4. GitHub hosting
 
@@ -37,7 +37,8 @@ Polish the generated webpage: show extracted fields, sorting/filtering, and run 
 ## Requirements to pass before moving to Phase 5
 
 - [ ] **Extracted fields** are shown on the webpage for each listing (when available); missing data is handled without errors.
-- [ ] **Run status** is visible on the page (last run time, success/failure, listing count or equivalent).
+- [ ] **Webpage shows only in-range listings:** Listings outside the configured price range are hidden (not shown); see [features.md](features.md).
+- [ ] **Run status** is visible on the page (last run time, success/failure, total count, N new, M updated).
 - [ ] **Sorting or filtering** is available (at least one of: sort by price, date, or filter by source/price). Prefer sort by date or price.
 - [ ] **GitHub Pages** is configured and the site updates automatically after each workflow run; no manual push needed.
 - [ ] **Scripts** are documented for local use (fetch.py, build_page.py, env vars, config).

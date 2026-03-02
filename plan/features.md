@@ -1,72 +1,113 @@
 # Desired Features
 
-All features the Utah Valley Rental Skimmer should support. See [reference.md](reference.md) for deduplication schema, config, and deliverables.
+This document is the **source of truth** for what the Utah Valley Rental Skimmer must support. It is used to guide implementation and to evaluate whether the project is complete. See [reference.md](reference.md) for deduplication schema, config shape, and deliverables.
+
+---
+
+## Definitions (for evaluation)
+
+- **New listing** – A listing seen for the first time this run; `first_seen` is set to this run.
+- **Updated listing** – A listing that already existed in the DB; `last_seen` is updated this run.
+- **Removed listing** – A listing that was in the DB but did not appear in the API response for **2 consecutive runs**; it must be **marked as removed** (e.g. status column), not necessarily deleted.
+- **Run status** – The record written after each pipeline run: last run timestamp, success/failure, and listing counts (see Feature 8).
+- **Pipeline** – fetch (Bright Data → SQLite) → [price filter] → [Claude extraction for new listings only] → build_page (SQLite → static HTML).
 
 ---
 
 ## 1. Scheduled skimming
 
-- **GitHub Actions** runs the pipeline on a schedule (e.g. every 12 hours) to fetch new/updated listings, run Claude API extraction on new listings only, and update the webpage. No local cron or manual git push.
+- The pipeline is run on a **schedule** defined in the GitHub Actions workflow. The schedule must run **every 6 to 24 hours** (e.g. cron every 6h, 12h, or 24h; exact interval is workflow-configurable within that range).
+- Webpage updates are triggered **only** by this scheduled workflow (and optionally by push to main, if desired). There is **no** reliance on local cron or on a manual git push to refresh listing data; the app must work without either.
+
+---
 
 ## 2. Multi-site support
 
-- Start with **Facebook Marketplace** (Bright Data API). Then add Zillow, KSL, Apartments.com; design so adding each new source is straightforward (Bright Data if available, else direct scraping).
+- **Rollout order:** Facebook Marketplace first, then Zillow, then KSL, then Apartments.com (see [reference.md](reference.md)#target-data-sources-from-researchmd).
+- **First source:** Facebook Marketplace via **Bright Data API** only.
+- **Additional sources:** Each new site uses the **same** SQLite schema and upsert contract (one row per `(source, source_listing_id)`); each site has a distinct **source** value (e.g. `facebook_marketplace`, `zillow`, `ksl`, `apartments_com`). Adding a source means adding one fetch adapter that outputs the same listing shape. Prefer **Bright Data** when available for that site; otherwise use direct scraping in line with Feature 7.
+- **Design criterion:** Adding a new source must not require changing the core schema or the contract for existing sources.
+
+---
 
 ## 3. Configurable search criteria
 
-- Location (cities/zip codes in Utah Valley), price range, bedrooms/bathrooms, property type (apartment, house, etc.), and optionally pet policy or keywords.
+- All of the following are **configurable** via the project’s config (TOML) and/or env; no hardcoded search parameters in production code.
+- **Location** – Cities and/or zip codes in Utah Valley (e.g. Provo, Orem; config-driven).
+- **Price** – Minimum and maximum rent (config keys e.g. `price_min`, `price_max`); both may be supported; at least `price_max` is required for the price filter (see “Price filter and LLM extraction” below).
+- **Bedrooms / bathrooms** – Minimum (or exact) as supported by the data source API (e.g. Bright Data parameters).
+- **Property type** – E.g. apartment, house, condo, townhouse; values and support depend on the source.
+- **Optional** (config may include; not required for MVP): pet-related keywords, free-text keywords. When present, they are passed to the source (e.g. Bright Data) where supported.
+
+---
 
 ## 4. Deduplication *(priority)*
 
-- Detect the same listing within a source (by source listing ID) and across sources (by normalized address). Use a stable **id/key** and **normalized address** in SQLite. Full design: [reference.md#deduplication-and-sqlite-schema](reference.md#deduplication-and-sqlite-schema).
+- **Within a source:** The same listing is identified by **source listing ID** (e.g. Bright Data product ID, or stable hash of link). Exactly **one row per (source, source_listing_id)**; upsert on fetch, never duplicate.
+- **Across sources:** The same physical property may be detected via **normalized address** (lowercase, normalized street suffixes, no extra punctuation); when two rows share the same non-empty normalized address, they may be merged or linked (e.g. `canonical_listing_id`) so the webpage can show one listing with “Also on Zillow, KSL.”
+- **Stable identity:** Each listing row has an internal **id** (e.g. INTEGER PRIMARY KEY) for stable URLs and joins. Full design: [reference.md#deduplication-and-sqlite-schema](reference.md#deduplication-and-sqlite-schema).
+
+---
 
 ## 5. Persistence
 
-- Store listings in **SQLite** (Python `sqlite3`) with first-seen and last-seen timestamps to track new vs. updated vs. removed. DB lives on the **data/** branch (not main).
+- Listings are stored in **SQLite** (Python `sqlite3`) with at least: **first_seen** and **last_seen** timestamps (set on insert; last_seen updated on every re-seen).
+- **New / updated / removed:** New = first_seen this run; updated = existing row with last_seen updated this run. **Removed:** A listing that does not appear in the API response for **2 consecutive runs** must be **marked as removed** (e.g. status column or equivalent); the project may optionally delete such rows later, but marking after 2 runs missing is required (see [reference.md](reference.md)).
+- The SQLite DB lives on the **data/** branch only; it must **not** be committed to **main**.
+
+---
 
 ## 6. New-listing alerts
 
-- Optional: notify when new listings match criteria (e.g. email or desktop notification). Primary view is the generated webpage.
+- **Scope:** Not required for MVP. If implemented, “new-listing alert” means: notify the user when one or more **new** listings appear that pass the **same match criteria** as the webpage (price range, location, and any other configured filters). Alerts must use the same criteria as the webpage; no separate filter set.
+- **Delivery:** Mechanism is TBD (e.g. email, desktop notification, webhook).
+- **Primary view** for the project remains the generated webpage; alerts are supplementary.
+
+---
 
 ## 7. Respectful data acquisition
 
-- Use Bright Data API for supported sites (they handle compliance). For any direct scraping added later, honor robots.txt, rate limits, and terms of use.
+- **Bright Data:** Use the Bright Data API for every supported site (they handle compliance). No direct scraping for Facebook Marketplace.
+- **Direct scraping (if added):** For any source not using Bright Data, the implementation must: **honor robots.txt**; apply **rate limits and backoff** (documented in code or config); and avoid violating the site’s stated terms of use. Rate limits and backoff must be explicit (e.g. delays, retry limits).
+
+---
 
 ## 8. Output and interaction
 
-- **Webpage:** Static HTML (and optional CSS/JS) generated from SQLite, hosted on GitHub (GitHub Pages). Updated after each workflow run. Include a **run status** indicator (last run time, success/failure, listing count) for simple observability from day one.
-- **Interaction:** Run the app via **scripts** (e.g. `fetch.py`, `build_page.py`); no formal CLI or local server required.
+- **Webpage**
+  - **Format:** Static HTML generated from SQLite; optional CSS/JS. No server-side logic; must be servable by GitHub Pages.
+  - **Hosting:** GitHub Pages. Content is updated after each successful (or partial) pipeline run.
+  - **Run status on page:** The page must display a **run status** indicator with: **(1)** last run timestamp (human-readable), **(2)** success or failure, **(3)** total listing count, and **(4)** counts for **N new** and **M updated** (required; e.g. “N new, M updated” or equivalent).
+- **Interaction**
+  - The app is run via **scripts** (e.g. `fetch.py`, `build_page.py`). Invocation: e.g. `python fetch.py`, `python build_page.py` (or equivalent). Scripts must be runnable **locally** (with env and config) and **in GitHub Actions**. No formal CLI framework and no long-running local HTTP server are required.
 
 ---
 
 ## Price filter and LLM extraction (Claude API)
 
-After the Bright Data API pulls in data, the app will:
-
-1. **Filter by price** – Keep only new or updated listings that match pre-set price criteria (e.g. **below $1,200**; configurable in config).
-2. **Claude API extraction only on new listings** – Run the LLM **only on listings that are new and within the parameters** (e.g. new + price < $1,200). Do not re-run extraction on every listing every time; newly fetched listings that pass the filter get extracted via the Claude API, results stored in SQLite.
-3. **Prototype Claude extraction separately** – Before building the full pipeline, prototype the Claude API extraction step in isolation; only then wire it into the main pipeline.
+- **Price filter:** The app applies a **configurable** price filter using at least **price_max** (and optionally **price_min**). Listings outside the configured range: **(a)** are not sent to the Claude API, and **(b)** must be **hidden from the webpage** (not shown at all). Only listings within the price range are shown on the page.
+- **Claude API only on new, in-range listings:** The LLM extraction step runs **only** on listings that are **(a)** new this run and **(b)** within the configured price (and any other configured filters). Extraction must **not** be re-run on every listing on every run; only newly fetched listings that pass the filter get extracted; results are stored in SQLite (e.g. `extracted` column).
+- **Prototype first:** The Claude extraction step must be **prototyped and validated in isolation** (Phase 2) before being wired into the main pipeline.
 
 ### Claude extraction schema (fields to extract)
 
-Include all of the following in the Claude extraction schema (stored in SQLite):
-
+- The extraction **schema** (the set of field names and expected types) must include **all** of the following. Each field is **optional** at runtime (null/absent if not mentioned or not extractable). Extracted data is stored in the listings table in a single **extracted** column as a JSON blob (see [reference.md](reference.md)).
 - **Washer / dryer** – Included in unit vs hookups only vs not mentioned.
 - **Renter-paid fees** – Utilities, trash, internet, parking, pet rent, etc. that the renter must pay in addition to rent.
-- **Availability / contract start** – When the unit is available or when the lease starts (date or "ASAP", "March", etc.).
+- **Availability / contract start** – When the unit is available or lease starts (date or “ASAP”, “March”, etc.).
 - **Pet policy** – Cats/dogs allowed, deposit, monthly pet rent, breed/weight limits.
 - **Parking** – Included, assigned, garage, street only, or extra cost.
 - **Lease length** – Month-to-month, 6 months, 12 months, or unspecified.
-- **Deposit** – Amount and whether refundable; any "last month" requirement.
+- **Deposit** – Amount and whether refundable; any “last month” requirement.
 - **Application / admin fees** – One-time fees to apply or move in.
 - **Furnished vs unfurnished** – Fully furnished, partial, or unfurnished.
-- **Square footage** – If mentioned (helps compare value).
+- **Square footage** – If mentioned (nullable if not).
 - **Roommates / layout** – Entire place vs room in shared unit; number of roommates.
-- **Subletting** – Whether subletting is allowed (matters for students/short stays).
+- **Subletting** – Whether subletting is allowed.
 - **Contact** – Landlord vs property manager; phone/email/message preference.
 - **Move-in incentives** – First month free, reduced deposit, waived fee.
 - **Amenities** – AC, dishwasher, storage, gym, pool, yard, laundry in building.
 - **Restrictions** – Non-smoking, student-only, no parties, credit check, etc.
-- **Location detail** – Neighborhood, cross streets, or "near BYU/UVU" if mentioned (when full address is not given).
+- **Location detail** – Neighborhood, cross streets, or “near BYU/UVU” if mentioned (when full address is not given).
 
-Pipeline: **Bright Data → SQLite → price filter (e.g. < $1,200) → Claude API extraction (new listings only) → update SQLite → build_page (incl. run status).**
+**Pipeline (canonical order):** Bright Data → SQLite (upsert) → price filter → Claude API extraction (new listings only) → update SQLite (extracted) → build_page (incl. run status).

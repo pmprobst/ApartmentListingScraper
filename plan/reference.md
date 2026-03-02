@@ -57,7 +57,7 @@ Deduplication is a priority. Use a **stable primary key**, **per-source business
 
 - **New** – Row just inserted (first_seen = this run).
 - **Updated** – Row already existed; last_seen updated this run.
-- **Removed** – Listing no longer in API response; optionally mark or delete after grace period.
+- **Removed** – Listing absent from the API response for **2 consecutive runs**; must be **marked as removed** (e.g. add a `status` or `removed_at` column; schema is implementation-defined). Optional: delete such rows later. See [features.md](features.md).
 
 ---
 

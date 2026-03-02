@@ -35,7 +35,7 @@ Define the full config (TOML) and validate LLM extraction in isolation before wi
 - [ ] **Config schema** is written in TOML and committed to the repo; all sections (search, bright_data, claude, paths, dedup, run_status) are specified with types/defaults or comments.
 - [ ] **Claude prototype script** exists, runs against sample listing text, and calls the Claude API successfully.
 - [ ] **Output validation** passes: the script validates that the API response conforms to the extraction schema (required fields present; no crash on parse).
-- [ ] **Latency** has been measured and recorded; team accepts that the LLM step is viable for the intended run frequency (e.g. every 12 hours with N new listings per run).
+- [ ] **Latency** has been measured and recorded; team accepts that the LLM step is viable for the intended run frequency (schedule: every 6–24 hours per [features.md](features.md)).
 - [ ] **No config loading** has been implemented yet in the main pipeline; config is spec-only.
 
 When all checkboxes are satisfied, proceed to [phase-3.md](phase-3.md).

@@ -12,7 +12,7 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 
 ### 2. Price filter
 
-- Apply **price filter** from config (e.g. `price_max`): when reading listings for display or for Claude, exclude (or tag) listings above the max. When deciding “which listings get Claude extraction,” only consider listings that are **new** (first_seen = this run) and **within price** (price <= price_max).
+- Apply **price filter** from config (e.g. `price_max`, `price_min`): list only listings **within** the range. Listings outside the range must be **hidden from the webpage** and must not be sent to Claude. For Claude extraction, only consider listings that are **new** (first_seen = this run) and **within price** (see [features.md](features.md)).
 
 ### 3. Claude extraction step
 
@@ -30,7 +30,7 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 ### 5. GitHub Actions workflow
 
 - Add `.github/workflows/run-pipeline.yml` (or similar) that:
-  - Triggers on **schedule** (e.g. every 12 hours) and optionally on push to main.
+  - Triggers on **schedule** (every 6–24 hours per [features.md](features.md)) and optionally on push to main.
   - **Checks out** the repo and the **data/** branch (or a step that fetches the data branch and places the SQLite file in the workspace).
   - Sets up **Python**, installs dependencies (e.g. from requirements.txt).
   - Runs **fetch.py** (config must point to the SQLite file path used on the data branch).
