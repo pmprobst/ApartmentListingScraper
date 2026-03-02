@@ -1,5 +1,5 @@
 # Utah Valley Rental Skimmer – config schema (TOML)
-# Load this schema; API keys come from env / GitHub Secrets (e.g. BRIGHTDATA_API_KEY, ANTHROPIC_API_KEY), not from this file.
+# Load this schema; API keys come from env / GitHub Secrets (e.g. BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY, ANTHROPIC_API_KEY), not from this file.
 
 [search]
 # Target area and listing filters (maps to Bright Data and in-app price filter)

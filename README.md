@@ -17,10 +17,17 @@ Skims online rental markets in Utah Valley (Bright Data → SQLite → webpage).
 
 ## Environment variables
 
-- **`BRIGHTDATA_API_KEY`** (required for fetch): Your Bright Data API key. Do not commit this; use a `.env` file locally or GitHub Secrets in CI.
-- **`LISTINGS_DB`** (optional): Path to the SQLite database file. Default can be `listings.db` in the current directory if unset.
+- **`BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY`** (required for fetch): Your Bright Data API key for Facebook Marketplace. Do not commit this; use a `.env` file locally or GitHub Secrets in CI. The script also accepts **`BRIGHTDATA_API_KEY`** as a fallback. **Setup:** [docs/BRIGHTDATA_API_KEY_SETUP.md](docs/BRIGHTDATA_API_KEY_SETUP.md) has step-by-step instructions for creating the correct API key on the Bright Data site.
+- **`LISTINGS_DB`** (optional): Path to the SQLite database file. Default: `listings.db`.
+- **`BRIGHTDATA_DATASET_ID`**, **`BRIGHTDATA_KEYWORD`**, **`BRIGHTDATA_CITY`** (optional): Bright Data Facebook Marketplace params. Defaults: dataset `gd_lvt9iwuh6fbcwmx1a`, keyword `Apartment`, city `Provo`. Used by `fetch.py`.
 
 **Do not commit `.env` or any file containing API keys.** The `.env` file is gitignored.
+
+## Phase 0 (Bright Data → SQLite)
+
+- **Fetch:** `python fetch.py` (requires `BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY` or `BRIGHTDATA_API_KEY` in `.env`). Optional: `python fetch.py --dry-run` to insert mock listings without calling the API.
+- **Run tests / see listing data:** `python main.py` runs fetch then prints all listings from the DB. Use `python main.py --dry-run` to skip the API and print mock data.
+- **Verify:** After a fetch, run `python scripts/verify_phase0_step4.py [path_to_listings.db]` to confirm the DB has listings with no duplicates and `first_seen`/`last_seen` set. Default DB path: `listings.db` or `LISTINGS_DB` env.
 
 ## Plan
 

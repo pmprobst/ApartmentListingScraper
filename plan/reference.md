@@ -107,7 +107,7 @@ If authentication or anti-bot measures make scraping impractical, use an **AI br
 
 ## Risks and considerations
 
-- **Bright Data:** Paid service; use **GitHub Secrets** (e.g. `BRIGHTDATA_API_KEY`); never commit keys.
+- **Bright Data:** Paid service; use **GitHub Secrets** (e.g. `BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY` or `BRIGHTDATA_API_KEY`); never commit keys.
 - **Terms of use:** For direct scraping later, honor robots.txt and rate limits. Facebook Marketplace covered by Bright Data.
 - **Site changes:** Tolerate optional API fields; design parsers for easy updates and logging.
 - **Rate limiting:** Follow Bright Data docs; use delays for any direct scraping.

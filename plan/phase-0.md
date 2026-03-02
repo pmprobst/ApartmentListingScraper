@@ -9,7 +9,7 @@ Build the data pipeline: Bright Data Facebook Marketplace API → SQLite with de
 ### 1. Project setup
 
 - Python project with dependency list (e.g. `requirements.txt`: `requests`, stdlib `sqlite3`). For this phase, use **env vars** and a **minimal config** (e.g. DB path, optional search/location params); the full config schema (TOML) is defined in [phase-2.md](phase-2.md).
-- Ensure `.env` and secrets are not committed; document that Bright Data API key comes from env (e.g. `BRIGHTDATA_API_KEY`).
+- Ensure `.env` and secrets are not committed; document that Bright Data API key comes from env (e.g. `BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY` or `BRIGHTDATA_API_KEY`).
 
 ### 2. SQLite schema and deduplication
 
