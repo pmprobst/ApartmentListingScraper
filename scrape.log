@@ -1,75 +1,25 @@
-Traceback (most recent call last):
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/connection.py", line 204, in _new_conn
-    sock = connection.create_connection(
-        (self._dns_host, self.port),
-    ...<2 lines>...
-        socket_options=self.socket_options,
-    )
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/util/connection.py", line 85, in create_connection
-    raise err
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/util/connection.py", line 73, in create_connection
-    sock.connect(sa)
-    ~~~~~~~~~~~~^^^^
-ConnectionRefusedError: [Errno 61] Connection refused
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/connectionpool.py", line 773, in urlopen
-    self._prepare_proxy(conn)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/connectionpool.py", line 1042, in _prepare_proxy
-    conn.connect()
-    ~~~~~~~~~~~~^^
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/connection.py", line 759, in connect
-    self.sock = sock = self._new_conn()
-                       ~~~~~~~~~~~~~~^^
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/connection.py", line 219, in _new_conn
-    raise NewConnectionError(
-        self, f"Failed to establish a new connection: {e}"
-    ) from e
-urllib3.exceptions.NewConnectionError: HTTPSConnection(host='127.0.0.1', port=63524): Failed to establish a new connection: [Errno 61] Connection refused
-
-The above exception was the direct cause of the following exception:
-
-urllib3.exceptions.ProxyError: ('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=63524): Failed to establish a new connection: [Errno 61] Connection refused"))
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/requests/adapters.py", line 644, in send
-    resp = conn.urlopen(
-        method=request.method,
-    ...<9 lines>...
-        chunked=chunked,
-    )
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/connectionpool.py", line 841, in urlopen
-    retries = retries.increment(
-        method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
-    )
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/urllib3/util/retry.py", line 535, in increment
-    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.brightdata.com', port=443): Max retries exceeded with url: /datasets/v3/trigger?dataset_id=gd_lvt9iwuh6fbcwmx1a&notify=false&include_errors=true&type=discover_new&discover_by=keyword&limit_per_input=2 (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=63524): Failed to establish a new connection: [Errno 61] Connection refused")))
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/scrape_download.py", line 39, in <module>
-    response = requests.post(
-        "https://api.brightdata.com/datasets/v3/trigger?dataset_id=gd_lvt9iwuh6fbcwmx1a&notify=false&include_errors=true&type=discover_new&discover_by=keyword&limit_per_input=2",
-    ...<3 lines>...
-        timeout=REQUEST_TIMEOUT_SEC,
-    )
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/requests/api.py", line 115, in post
-    return request("post", url, data=data, json=json, **kwargs)
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/requests/api.py", line 59, in request
-    return session.request(method=method, url=url, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/requests/sessions.py", line 589, in request
-    resp = self.send(prep, **send_kwargs)
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/requests/sessions.py", line 703, in send
-    r = adapter.send(request, **kwargs)
-  File "/Users/pprobst/Repos/UtahValleyHousingScrapper/.venv/lib/python3.14/site-packages/requests/adapters.py", line 671, in send
-    raise ProxyError(e, request=request)
-requests.exceptions.ProxyError: HTTPSConnectionPool(host='api.brightdata.com', port=443): Max retries exceeded with url: /datasets/v3/trigger?dataset_id=gd_lvt9iwuh6fbcwmx1a&notify=false&include_errors=true&type=discover_new&discover_by=keyword&limit_per_input=2 (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=63524): Failed to establish a new connection: [Errno 61] Connection refused")))
+Triggered snapshot_id=sd_mm8nqzyl1izwo5w1mi
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Status: running
+Timeout waiting for snapshot
+HousingScrapper/.venv/lib/python3.14/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 404 Client Error: Not Found for url: https://api.brightdata.com/datasets/snapshots/sd_mm8nrxhf1nf53pivl0/download?format=json
