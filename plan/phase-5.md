@@ -22,7 +22,7 @@ Harden the pipeline: error handling, logging, and optional reporting. No new fea
 
 ### 4. Optional: listing diff report
 
-- If useful, add a **lightweight report** (e.g. markdown or text file) per run: "N new, M updated, K removed" or a short list of new/updated listing titles. This can be written to the repo (e.g. on the data branch) or only to logs. Optional for Phase 5 pass.
+- If useful, add a **lightweight report** (e.g. markdown or text file) per run: "N new, M updated, K removed" or a short list of new/updated listing titles. This can be written to the repo (e.g. in the private DB repo) or only to logs. Optional for Phase 5 pass.
 
 ### 5. Documentation
 

@@ -28,8 +28,8 @@ timeout_seconds = 60                  # integer: request timeout
 extract_fields = "all"                 # string: "all" or comma-separated list of field names to extract
 
 [paths]
-# File system paths (workflow: DB lives on data/ branch; output is for Pages)
-db = "listings.db"                    # string: SQLite filename (path relative to repo when on data/ branch)
+# File system paths (workflow: DB is fetched from private repo; output is for Pages)
+db = "listings.db"                    # string: SQLite filename (path where DB is checked out or stored in runner)
 output = "docs"                       # string: directory for generated static site ("docs" or build to gh-pages branch)
 config_file = "config.toml"           # string, optional: path to this config (for overrides)
 

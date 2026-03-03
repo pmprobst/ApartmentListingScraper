@@ -15,7 +15,7 @@ Build the data pipeline: Bright Data Facebook Marketplace API → SQLite with de
 
 - Create the **listings** table per [reference.md#deduplication-and-sqlite-schema](reference.md#deduplication-and-sqlite-schema): `id`, `source`, `source_listing_id`, `normalized_address`, `address_raw`, `link`, `title`, `price`, `beds`, `baths`, `first_seen`, `last_seen`, `extracted` (TEXT/JSON), optional `canonical_listing_id`. UNIQUE constraint on `(source, source_listing_id)`.
 - Implement **address normalization** (lowercase, strip punctuation, normalize street suffixes) and **upsert logic**: for each listing from the API, compute `source_listing_id` (from product_id or hash of link) and `normalized_address`; INSERT or REPLACE / ON CONFLICT DO UPDATE so one row per (source, source_listing_id). Set `first_seen` on insert, `last_seen` on every update.
-- Optional for Phase 0: cross-source merge (canonical_listing_id); at minimum, no duplicate rows for the same (source, source_listing_id).
+- **Cross-source deduplication (Phase 0):** When a new row has the same non-empty `normalized_address` as an existing row from a different **source**, link them via **canonical_listing_id** (or merge) so the webpage can later show one listing with “Also on Zillow, KSL.” Implement the schema and logic in Phase 0 so adding new sources does not require schema changes.
 
 ### 3. Bright Data integration (`fetch.py`)
 
@@ -35,8 +35,9 @@ Build the data pipeline: Bright Data Facebook Marketplace API → SQLite with de
 
 ## Requirements to pass before moving to Phase 1
 
-- [ ] **SQLite schema** is created with listings table (id, source, source_listing_id, normalized_address, address_raw, link, title, price, beds, baths, first_seen, last_seen, extracted) and UNIQUE(source, source_listing_id).
+- [ ] **SQLite schema** is created with listings table (id, source, source_listing_id, normalized_address, address_raw, link, title, price, beds, baths, first_seen, last_seen, extracted, optional canonical_listing_id per [reference.md](reference.md)) and UNIQUE(source, source_listing_id).
 - [ ] **Upsert** ensures one row per (source, source_listing_id); first_seen and last_seen are set correctly; normalized_address is populated when address is available.
+- [ ] **Cross-source deduplication:** When the same normalized_address appears for a different source, rows are linked via canonical_listing_id (or merged) per reference.md.
 - [ ] **fetch.py** successfully calls Bright Data API (Facebook Marketplace), normalizes response, and upserts into SQLite only.
 - [ ] **End-to-end** (fetch only) runs locally and produces a populated SQLite DB with at least one listing.
 

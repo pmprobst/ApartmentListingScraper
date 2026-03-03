@@ -1,18 +1,18 @@
 # Phase 3: Claude API extraction for new listings only, then expand sites and GitHub Actions
 
-Add Claude extraction (only for new listings within price filter), then add GitHub Actions and optional additional sites. SQLite stays on **data/** branch.
+Add Claude extraction (only for new listings within price filter), then add GitHub Actions and optional additional sites. SQLite is stored in a **separate private repo** (not in the public repo); see workflow steps below.
 
 ---
 
 ## Detailed steps
 
-### 1. Config loading (optional refactor)
+### 1. Config loading (required)
 
-- Optionally refactor `fetch.py` and `build_page.py` to use the full **config from Phase 2** (TOML) instead of env/minimal config. Ensure paths, search, bright_data, run_status, and later claude settings are read from config.
+- Refactor `fetch.py` and `build_page.py` to use the full **config from Phase 2** (TOML). **This is required.** Pipeline scripts must read paths, search (price_max, price_min, location, etc.), bright_data, run_status, and claude settings from the TOML config. API keys (Bright Data, Claude) remain in **env / GitHub Secrets** only; do not put secrets in config.
 
-### 2. Price filter
+### 2. Price filter (already in Phase 1)
 
-- Apply **price filter** from config (e.g. `price_max`, `price_min`): list only listings **within** the range. Listings outside the range must be **hidden from the webpage** and must not be sent to Claude. For Claude extraction, only consider listings that are **new** (first_seen = this run) and **within price** (see [features.md](features.md)).
+- **Price filter** is already implemented in Phase 1 (build_page shows only in-range listings). In Phase 3, ensure the **Claude extraction** step uses the same config: only consider listings that are **new** (first_seen = this run) and **within price** (price_min ≤ price ≤ price_max from config). Listings outside the range must not be sent to Claude (see [features.md](features.md)).
 
 ### 3. Claude extraction step
 
@@ -27,18 +27,19 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 
 - After `fetch.py` runs (and upserts new/updated listings), run the **Claude extraction** step for new listings only, then run `build_page.py`. Pipeline order: fetch → extract (new only) → build_page.
 
-### 5. GitHub Actions workflow
+### 5. GitHub Actions workflow (separate private repo for DB)
 
 - Add `.github/workflows/run-pipeline.yml` (or similar) that:
   - Triggers on **schedule** (every 6–24 hours per [features.md](features.md)) and optionally on push to main.
-  - **Checks out** the repo and the **data/** branch (or a step that fetches the data branch and places the SQLite file in the workspace).
+  - **Checks out** the **public repo** (this repo: code only). Uses a **secret** (e.g. PAT or deploy key) with access to a **separate private repo** that holds **only the SQLite DB** (and any run_status files).
+  - **Fetches the DB from the private repo** (e.g. clone the private repo into a subdir or download the DB file via API) so the workflow has the current SQLite file in the workspace.
   - Sets up **Python**, installs dependencies (e.g. from requirements.txt).
-  - Runs **fetch.py** (config must point to the SQLite file path used on the data branch).
+  - Runs **fetch.py** (config points to the DB path in the workspace).
   - Runs the **Claude extraction** step for new listings.
   - Runs **build_page.py**.
-  - **Commits and pushes** the updated SQLite file (and any run_status) back to the **data/** branch.
-  - **Commits and pushes** the generated static site (e.g. `docs/` or `gh-pages` branch) so GitHub Pages serves it.
-- Store **Bright Data API key** and **Claude API key** in **GitHub Secrets**; pass them as env vars in the workflow. Do **not** commit the SQLite file to **main**; only to the data branch.
+  - **Commits and pushes** the updated SQLite file (and any run_status) **back to the private repo** (not to the public repo).
+  - **Commits and pushes** the generated static site (e.g. `docs/` or `gh-pages` branch) to the **public repo** so GitHub Pages serves it.
+- Store **Bright Data API key**, **Claude API key**, and **private-repo access token** in **GitHub Secrets**; pass them as env vars. The **SQLite DB never appears in the public repo**; only code and the generated HTML are public.
 
 ### 6. New vs updated tagging
 
@@ -52,11 +53,12 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 
 ## Requirements to pass before moving to Phase 4
 
-- [ ] **Price filter** is applied from config; only listings within price_max (and new) are sent to Claude.
+- [ ] **Pipeline scripts read from TOML config:** fetch.py and build_page.py read paths, search, bright_data, run_status, and claude from config; API keys from env only.
+- [ ] **Price filter** (from Phase 1) is respected by Claude step: only listings within price_max/price_min (and new) are sent to Claude.
 - [ ] **Claude extraction** runs only for **new** listings (first_seen = current run) within price; extracted data is stored in SQLite (extracted column or equivalent).
 - [ ] **Pipeline order** is correct: fetch → Claude for new listings → build_page.
-- [ ] **GitHub Actions** workflow exists, runs on schedule, checks out or uses **data/** branch for SQLite, runs fetch → extract → build_page, pushes DB updates to **data/** and site to Pages branch/folder. SQLite is **not** committed to main.
-- [ ] **Secrets** (Bright Data, Claude API) are stored in GitHub Secrets and used as env vars in the workflow.
-- [ ] At least one successful full run via GitHub Actions (or documented manual equivalent) that updates the data branch and the live page.
+- [ ] **GitHub Actions** workflow exists, runs on schedule, **fetches DB from a separate private repo**, runs fetch → extract → build_page, **pushes DB updates back to the private repo**, and pushes generated site to the public repo (e.g. docs/ or gh-pages). SQLite is **never** committed to the public repo.
+- [ ] **Secrets** (Bright Data, Claude API, private-repo token) are stored in GitHub Secrets and used as env vars in the workflow.
+- [ ] At least one successful full run via GitHub Actions (or documented manual equivalent) that updates the private DB repo and the live page.
 
 When all checkboxes are satisfied, proceed to [phase-4.md](phase-4.md).

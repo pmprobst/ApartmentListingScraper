@@ -8,9 +8,9 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
 
 - **New listing** – A listing seen for the first time this run; `first_seen` is set to this run.
 - **Updated listing** – A listing that already existed in the DB; `last_seen` is updated this run.
-- **Removed listing** – A listing that was in the DB but did not appear in the API response for **2 consecutive runs**; it must be **marked as removed** (e.g. status column), not necessarily deleted.
+- **Removed listing** – A listing that is **phased out 30 days after last being seen** (based on `last_seen`). Listings whose `last_seen` is more than 30 days ago are treated as removed: they must be **marked as removed** (e.g. `status` or `removed_at` column) or excluded from the webpage; the project may optionally delete such rows later.
 - **Run status** – The record written after each pipeline run: last run timestamp, success/failure, and listing counts (see Feature 8).
-- **Pipeline** – fetch (Bright Data → SQLite) → [price filter] → [Claude extraction for new listings only] → build_page (SQLite → static HTML).
+- **Pipeline** – fetch (Bright Data → SQLite) → [price filter] → [Claude extraction for new listings only] → build_page (SQLite → static HTML). (Canonical order in § Price filter and LLM extraction below.)
 
 ---
 
@@ -44,7 +44,7 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
 ## 4. Deduplication *(priority)*
 
 - **Within a source:** The same listing is identified by **source listing ID** (e.g. Bright Data product ID, or stable hash of link). Exactly **one row per (source, source_listing_id)**; upsert on fetch, never duplicate.
-- **Across sources:** The same physical property may be detected via **normalized address** (lowercase, normalized street suffixes, no extra punctuation); when two rows share the same non-empty normalized address, they may be merged or linked (e.g. `canonical_listing_id`) so the webpage can show one listing with “Also on Zillow, KSL.”
+- **Across sources:** The same physical property is detected via **normalized address** (lowercase, normalized street suffixes, no extra punctuation); when two rows share the same non-empty normalized address, they are merged or linked (e.g. `canonical_listing_id`) so the webpage can show one listing with “Also on Zillow, KSL.” Implemented in **Phase 0**.
 - **Stable identity:** Each listing row has an internal **id** (e.g. INTEGER PRIMARY KEY) for stable URLs and joins. Full design: [reference.md#deduplication-and-sqlite-schema](reference.md#deduplication-and-sqlite-schema).
 
 ---
@@ -52,8 +52,8 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
 ## 5. Persistence
 
 - Listings are stored in **SQLite** (Python `sqlite3`) with at least: **first_seen** and **last_seen** timestamps (set on insert; last_seen updated on every re-seen).
-- **New / updated / removed:** New = first_seen this run; updated = existing row with last_seen updated this run. **Removed:** A listing that does not appear in the API response for **2 consecutive runs** must be **marked as removed** (e.g. status column or equivalent); the project may optionally delete such rows later, but marking after 2 runs missing is required (see [reference.md](reference.md)).
-- The SQLite DB lives on the **data/** branch only; it must **not** be committed to **main**.
+- **New / updated / removed:** New = first_seen this run; updated = existing row with last_seen updated this run. **Removed:** A listing is phased out **30 days after last being seen** (`last_seen`); listings with `last_seen` older than 30 days must be **marked as removed** (e.g. `status` or `removed_at` column) or excluded from the webpage; the project may optionally delete such rows later (see [reference.md](reference.md)).
+- The SQLite DB is stored in a **separate private repo** (or equivalent private store); it must **not** be committed to the **public** repo. See [reference.md](reference.md) and phase-3 for workflow details.
 
 ---
 
@@ -77,7 +77,7 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
 - **Webpage**
   - **Format:** Static HTML generated from SQLite; optional CSS/JS. No server-side logic; must be servable by GitHub Pages.
   - **Hosting:** GitHub Pages. Content is updated after each successful (or partial) pipeline run.
-  - **Run status on page:** The page must display a **run status** indicator with: **(1)** last run timestamp (human-readable), **(2)** success or failure, **(3)** total listing count, and **(4)** counts for **N new** and **M updated** (required; e.g. “N new, M updated” or equivalent).
+  - **Run status on page:** The page must display a **run status** indicator with: **(1)** last run timestamp (human-readable), **(2)** success or failure, **(3)** total listing count, and **(4)** counts for **N new** and **M updated** (required; e.g. “N new, M updated” or equivalent). Optionally, run status may include **K removed** (count of listings marked removed or phased out).
 - **Interaction**
   - The app is run via **scripts** (e.g. `fetch.py`, `build_page.py`). Invocation: e.g. `python fetch.py`, `python build_page.py` (or equivalent). Scripts must be runnable **locally** (with env and config) and **in GitHub Actions**. No formal CLI framework and no long-running local HTTP server are required.
 

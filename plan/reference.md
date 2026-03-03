@@ -51,13 +51,20 @@ Deduplication is a priority. Use a **stable primary key**, **per-source business
 
 1. **On fetch:** Compute `source_listing_id` (from product_id or link hash), `normalized_address` from address_raw (or empty if missing).
 2. **Upsert by (source, source_listing_id):** INSERT or INSERT ... ON CONFLICT DO UPDATE. Update `last_seen` and changed fields; set `first_seen` only on insert.
-3. **Cross-source (optional):** If `normalized_address` is non-empty, look for another row with same `normalized_address` and different `source`. If found, set `canonical_listing_id` or merge; display as one listing.
+3. **Cross-source (Phase 0):** If `normalized_address` is non-empty, look for another row with same `normalized_address` and different `source`. If found, set `canonical_listing_id` or merge; display as one listing.
 
 ### New vs updated vs removed
 
 - **New** – Row just inserted (first_seen = this run).
 - **Updated** – Row already existed; last_seen updated this run.
-- **Removed** – Listing absent from the API response for **2 consecutive runs**; must be **marked as removed** (e.g. add a `status` or `removed_at` column; schema is implementation-defined). Optional: delete such rows later. See [features.md](features.md).
+- **Removed** – A listing is **phased out 30 days after last being seen** (`last_seen`). Listings whose `last_seen` is more than 30 days ago must be **marked as removed** (e.g. add a `status` or `removed_at` column; schema is implementation-defined) or excluded from the webpage. Optional: delete such rows later. See [features.md](features.md).
+
+#### Implementation: 30-day phased removal
+
+1. **Schema:** Add an optional `removed_at` (TEXT/INTEGER timestamp) or `status` (e.g. `active` / `removed`) column to the listings table. If omitted, "removed" is implied by filtering on `last_seen` at read time.
+2. **After each fetch run:** Compute the cutoff timestamp (e.g. now − 30 days). Either (a) **mark** rows with `last_seen` &lt; cutoff: `UPDATE listings SET removed_at = ? OR status = 'removed' WHERE last_seen < cutoff`, or (b) leave rows as-is and treat "removed" as a view (WHERE last_seen &gt;= cutoff) in queries.
+3. **build_page and run_status:** Only include listings that are not removed (e.g. `removed_at IS NULL` or `last_seen >= cutoff`). Run status may optionally include count of listings marked removed or beyond the 30-day cutoff.
+4. **Phase ownership:** Implement in **Phase 1** (run status and static webpage) so the first generated page only shows listings within the 30-day window and run_status can optionally report K removed.
 
 ---
 
@@ -68,7 +75,7 @@ Define the full config in TOML before writing code. Suggested contents:
 - **Search / sources:** Location, price max/min, bedrooms/bathrooms, category/keywords for Bright Data.
 - **Bright Data:** Dataset ID, endpoint, source-specific options.
 - **Claude API:** API key (via env/Secrets only), model name, timeout, which fields to extract.
-- **Paths:** SQLite file path (workflow uses **data/** branch), output directory for static site, config file path.
+- **Paths:** SQLite file path (workflow uses a **separate private repo** for the DB; config points to the path where the DB is checked out or stored in the runner), output directory for static site, config file path.
 - **Run status:** Where to write last run timestamp and outcome (SQLite table or small status file).
 - **Deduplication:** Address-normalization options (e.g. suffix mappings) in config if needed.
 
@@ -90,7 +97,7 @@ Example: `config_schema.toml` in repo root. No config loading implementation unt
 | Plan | plan/ directory – features, phases, reference. |
 | Config | Config schema (TOML) committed; search, price filter, Bright Data, Claude, paths, dedup options. |
 | Data acquisition | Bright Data API for Facebook Marketplace first; then Zillow, KSL, Apartments.com. Output to SQLite. |
-| Storage | SQLite with listings, timestamps, source, extracted fields. Stored on **data/** branch. |
+| Storage | SQLite with listings, timestamps, source, extracted fields. Stored in a **separate private repo** (not in the public repo). |
 | Scheduler | GitHub Actions workflow; credentials via GitHub Secrets. |
 | Webpage | Static HTML on GitHub Pages; run status indicator. |
 | Claude API | Prototype separately first; then run only on new listings. API key in GitHub Secrets / env. |

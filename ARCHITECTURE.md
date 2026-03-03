@@ -10,6 +10,8 @@ This document describes the **current** state of the Utah Valley Rental Skimmer 
 
 Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) plus some **experimental Bright Data scraper utilities**.
 
+**Doc map:** Roadmap, feature list, and phase steps live in **plan/**: [plan/plan.md](plan/plan.md) (overview), [plan/features.md](plan/features.md) (requirements), [plan/reference.md](plan/reference.md) (schema, config, sources), and [plan/phase-*.md](plan/phase-0.md) (steps and checklists).
+
 ---
 
 ## Components and responsibilities

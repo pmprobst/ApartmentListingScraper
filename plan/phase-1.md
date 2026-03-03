@@ -1,6 +1,6 @@
 # Phase 1: Run status and static webpage
 
-Add run status tracking and webpage generation. Build on Phase 0: fetch.py will now update run_status; build_page.py reads listings and run_status and generates the static HTML.
+Add run status tracking, **price filter**, **30-day phased removal**, and webpage generation. Build on Phase 0: fetch.py will now update run_status and apply removal logic; build_page.py reads listings (within price range and within 30-day window) and run_status and generates the static HTML.
 
 ---
 
@@ -8,28 +8,42 @@ Add run status tracking and webpage generation. Build on Phase 0: fetch.py will 
 
 ### 1. Run status
 
-- Add a **run_status** table or small status store (e.g. in the same SQLite DB: table with last run timestamp, success/failure, total listing count, **N new**, **M updated**). After each run of `fetch.py`, record these values. They will be read by `build_page.py` for the webpage indicator (see [features.md](features.md) §8).
+- Add a **run_status** table or small status store (e.g. in the same SQLite DB: table with last run timestamp, success/failure, total listing count, **N new**, **M updated**, and optionally **K removed**). After each run of `fetch.py`, record these values. They will be read by `build_page.py` for the webpage indicator (see [features.md](features.md) §8).
 - Update **fetch.py** from Phase 0 so it writes to **run_status** after each run (timestamp, success, count).
 
-### 2. Webpage generation (`build_page.py`)
+### 2. Price filter (Phase 1)
+
+- Apply a **configurable price filter** using at least **price_max** (and optionally **price_min**). Read from env or minimal config (e.g. `PRICE_MAX`, `PRICE_MIN`); full TOML config comes in Phase 2.
+- **build_page.py** must **only include listings within the configured price range** on the webpage. Listings outside the range are hidden (not shown at all). From Phase 1 onward, the generated page shows only in-range listings.
+
+### 3. 30-day phased removal
+
+- Listings are **phased out 30 days after last being seen** (see [features.md](features.md) and [reference.md](reference.md)#new-vs-updated-vs-removed). Implement per the implementation plan in reference.md:
+  - Add optional **removed_at** or **status** column to the listings table, or treat “removed” as a filter at read time (listings with `last_seen` &lt; now − 30 days).
+  - After each fetch run (or in build_page), consider listings with `last_seen` older than 30 days as removed: either mark them (UPDATE) or exclude them in queries.
+  - **build_page.py** only includes listings that are **within the 30-day window** (and within price range). Run status may optionally include **K removed** (count phased out).
+
+### 4. Webpage generation (`build_page.py`)
 
 - Implement `build_page.py` that:
-  - Reads DB path (and optional output path) from env or minimal config.
-  - Opens the SQLite DB, reads **listings** (e.g. all rows or those with last_seen in last N days) and **run_status**.
-  - Generates **static HTML** (and optional CSS/JS) that lists the listings (title, link, price, beds, baths, address, etc.) and displays the **run status** (last run time, success/failure, total count, N new, M updated per [features.md](features.md)).
+  - Reads DB path, output path, and **price_max** / **price_min** (and optional 30-day cutoff) from env or minimal config.
+  - Opens the SQLite DB, reads **listings** that are **(a)** within the configured price range and **(b)** within the 30-day window (last_seen &gt;= cutoff), and **run_status**.
+  - Generates **static HTML** (and optional CSS/JS) that lists those listings (title, link, price, beds, baths, address, etc.) and displays the **run status** (last run time, success/failure, total count, N new, M updated, and optionally K removed per [features.md](features.md)).
   - Writes output to the configured directory (e.g. `docs/` for GitHub Pages).
 - Output must be static (no server-side logic) so GitHub Pages can serve it.
 
-### 3. Local test
+### 5. Local test
 
-- Run `fetch.py`, then `build_page.py`. Verify: run_status is updated after fetch; generated page shows listings and run status.
+- Run `fetch.py`, then `build_page.py`. Verify: run_status is updated after fetch; generated page shows only in-range and within-30-day listings and run status.
 
 ---
 
 ## Requirements to pass before moving to Phase 2
 
-- [ ] **run_status** is stored (SQLite table or file) and updated by fetch.py after each run (timestamp, success/failure, total count, N new, M updated).
-- [ ] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list and run status indicator.
+- [ ] **run_status** is stored (SQLite table or file) and updated by fetch.py after each run (timestamp, success/failure, total count, N new, M updated; optionally K removed).
+- [ ] **Price filter** is applied: build_page.py only includes listings within configured price_max (and optional price_min).
+- [ ] **30-day phased removal** is implemented: listings with last_seen older than 30 days are marked or excluded; build_page shows only listings within the 30-day window (and price range).
+- [ ] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list (filtered by price and 30-day window) and run status indicator.
 - [ ] **End-to-end** (fetch → build_page) runs locally and produces a valid HTML page with at least one listing and run status visible.
 
 When all checkboxes are satisfied, proceed to [phase-2.md](phase-2.md).
