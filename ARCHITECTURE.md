@@ -224,6 +224,299 @@ These two scripts are **standalone helpers** for working directly with Bright Da
 
 ---
 
+## Script‑by‑script reference
+
+This section documents each Python script in the repo and the key functions within it, reflecting the **current** workflow.
+
+### `db.py` – schema, dedup, and run status
+
+#### `normalize_address(raw)`
+
+- Normalize free‑form addresses for deduplication (lowercase, strip punctuation, collapse whitespace, normalize street suffixes like `st → street`, `ave → avenue`).
+
+#### `get_connection(db_path)`
+
+- Open or create the SQLite database at `db_path`, set `row_factory = sqlite3.Row`, ensure tables exist via `init_schema`, and return the connection.
+
+#### `init_schema(conn)`
+
+- Create (idempotently):
+  - `listings` table with uniqueness on `(source, source_listing_id)`, normalized address fields, and optional `extracted` and `canonical_listing_id`.
+  - `run_status` table with metrics for fetch/ingest, LLM processing, and page builds.
+
+#### `_now_iso()`
+
+- Internal helper that returns the current UTC time as an ISO‑8601 string; used for `first_seen`, `last_seen`, and `run_status.last_run_ts`.
+
+#### `upsert_listing(conn, *, source, source_listing_id, link, ..., extracted=None)`
+
+- Insert or update a row in `listings` by `(source, source_listing_id)`:
+  - Computes `normalized_address` from `address_raw` unless explicitly provided.
+  - On insert, sets `first_seen` and `last_seen` to now.
+  - On update, refreshes most fields and `last_seen` while leaving `first_seen` unchanged.
+  - Stores structured `extracted` data as JSON text and uses `COALESCE` so `None` does not erase existing extractions.
+  - Performs cross‑source dedup: when `normalized_address` is non‑empty, links to another listing with the same normalized address but a different `source` via `canonical_listing_id`.
+
+#### `update_run_status_after_fetch(conn, *, success, scraped, thrown, duplicate, added, total_count)`
+
+- Upsert the single `run_status` row to record metrics after an ingest run:
+  - `scraped`: total records seen from snapshots.
+  - `thrown`: invalid/error records skipped.
+  - `duplicate`: existing rows updated.
+  - `added`: new rows inserted.
+  - `total_count`: `COUNT(*)` in `listings` after the run.
+- Preserves any existing `llm_processed` and `displayed` values.
+
+#### `update_run_status_after_llm(conn, *, llm_processed)`
+
+- Future‑phase hook for the LLM/Claude extraction step:
+  - Ensures a `run_status` row exists.
+  - Updates `last_run_ts` and `llm_processed`, leaving fetch metrics and `displayed` unchanged.
+
+#### `update_run_status_after_build_page(conn, *, displayed)`
+
+- Record how many rows were actually rendered into the static HTML page by `build_page.py`:
+  - Ensures a `run_status` row exists.
+  - Updates `last_run_ts` and `displayed`, preserving fetch and LLM metrics.
+
+#### `get_run_status(conn)`
+
+- Read helper that returns the single `run_status` row (`id = 1`) or `None` if no runs have been recorded yet.
+
+---
+
+### `ingest_records.py` – snapshot ingestion and normalization
+
+This module replaces the older `fetch.py` pipeline. Instead of calling Bright Data directly, it works with **snapshot JSON files** that have been downloaded by `scrape.py` / `scrape_download.py`.
+
+#### Constants and helpers
+
+- **`LISTINGS_DB` / `DEFAULT_DB`**: Env key and default path for the main SQLite file (`"listings.db"`).
+- **`SNAPSHOT_HISTORY_PATH`**: Path to `snapshot_history.jsonl`, shared with the `scrape*` scripts.
+- **`MARKETPLACE_ITEM_BASE`**: Base URL (`https://www.facebook.com/marketplace/item`) for canonical item links.
+- **`MOCK_RECORDS`**: Two mock listings used by `run_fetch_dry_run` and tests.
+- **`_env(key, default=None)`**: Simple env helper that reads and strips values, falling back to `default`.
+
+#### `_source_listing_id(record)`
+
+- Compute a stable per‑source ID:
+  - Prefer `product_id`, `listing_id`, `id`, then `listingID` if present.
+  - Otherwise, hash `link`/`url`/`listing_url` to a 32‑character SHA‑256 prefix.
+  - Fall back to hashing `title` as a last resort.
+
+#### `_norm_price(val)` / `_norm_num(val)`
+
+- Normalize numeric inputs:
+  - `_norm_price`: strips `$` and commas before parsing; returns `float` or `None`.
+  - `_norm_num`: parses generic numeric strings; returns `float` or `None`.
+
+#### `_address_raw(record)`
+
+- Derive a single `address_raw` field from various shapes:
+  - If `location` is a string, returns it.
+  - If `location` is a dict, joins `city`, `state`, `address`, `street`, `region`.
+  - Otherwise tries `address`, `address_raw`, `city`, `location_name` in that order.
+
+#### `_numeric_listing_id(record)`
+
+- Extract a numeric Marketplace id when possible:
+  - Scans `listing_id`, `product_id`, `item_id`, `id` for digit‑like values.
+  - If not found, tries to parse `/marketplace/item/{id}` or `/item/{id}` from links.
+
+#### `normalize_record(record)`
+
+- Map a raw Bright Data record to the internal listing schema:
+  - `source_listing_id`: from `_source_listing_id`.
+  - `link`: canonical `MARKETPLACE_ITEM_BASE/{id}/` when `_numeric_listing_id` succeeds, else a best‑effort URL.
+  - `title`: from `title` or `name`.
+  - `price`: from `price`/`final_price`/`initial_price`/`listing_price` via `_norm_price`.
+  - `beds`: from `beds`/`bedrooms`/`bed` via `_norm_num`.
+  - `baths`: from `baths`/`bathrooms`/`bath` via `_norm_num`.
+  - `address_raw`: from `_address_raw`.
+
+#### `_load_snapshot_payload(payload)`
+
+- Normalize snapshot JSON shapes into a list of dicts:
+  - If `payload` is a list → return the list of dicts.
+  - If `payload` is a dict → return any list under `data` / `results` / `listings` / `items` / `records`, or wrap the dict as a single‑element list.
+
+#### `load_snapshot_file(path)`
+
+- Load `marketplace_snapshot_*.json` files written by `scrape_download.py`, parse them, call `_load_snapshot_payload`, log the count, and return the list of records.
+
+#### `ingest_records(db_path, records)`
+
+- Core ingestion loop from Bright Data records into SQLite:
+  - Uses `get_connection(db_path)` from `db.py`.
+  - Counts `scraped` as the total number of input records.
+  - Skips “thrown” records:
+    - Non‑dict entries.
+    - Entries with `error` or `error_code` set.
+    - Entries whose normalized `link` is empty or falls back to the generic Marketplace root URL.
+  - For each remaining record:
+    - Builds `norm = normalize_record(record)`.
+    - Checks if a listing with `source="facebook_marketplace"` and the same `source_listing_id` already exists:
+      - If yes → increments `duplicate`.
+      - If no → increments `added`.
+    - Calls `upsert_listing` with the normalized fields.
+  - After the loop:
+    - Computes `total_count = COUNT(*) FROM listings`.
+    - Calls `update_run_status_after_fetch` with `success=True` and the computed counters.
+  - Returns the number of processed (non‑thrown) records.
+
+#### `ingest_snapshot_file(db_path, snapshot_path)`
+
+- Convenience wrapper:
+  - Loads a single snapshot file via `load_snapshot_file`.
+  - Calls `ingest_records` and returns the ingested count.
+
+#### `_append_history(snapshot_id, status)`
+
+- Append a JSON line to `snapshot_history.jsonl` recording the new `status` for a given `snapshot_id` with current UTC timestamps.
+
+#### `_latest_snapshot_states()`
+
+- Build a map of `snapshot_id → latest_state` by reading `snapshot_history.jsonl` and keeping only the last record seen for each id.
+
+#### `ingest_all_downloaded_from_history(db_path=None)`
+
+- End‑to‑end ingestion of all snapshots whose **latest** status is `"downloaded"`:
+  - Resolve `db_path` from env if not provided.
+  - Read snapshot states via `_latest_snapshot_states()`.
+  - For each snapshot with `status == "downloaded"` and an existing `marketplace_snapshot_{snapshot_id}.json` file:
+    - Ingest it via `ingest_snapshot_file`.
+    - Append a new `"ingested"` status via `_append_history`.
+  - Log and return the total number of records ingested across all such snapshots.
+
+#### `run_fetch_dry_run(db_path)`
+
+- Insert `MOCK_RECORDS` into the DB using `normalize_record` and `upsert_listing`, without calling Bright Data.
+- Used by the test suite as a fast, deterministic Phase‑0 pipeline check.
+
+#### CLI block (`if __name__ == "__main__":`)
+
+- Resolve `db_path` from `LISTINGS_DB` / `DEFAULT_DB`.
+- Call `ingest_all_downloaded_from_history(db_path)` and log how many records were ingested from downloaded snapshots.
+
+---
+
+### `build_page.py` – static HTML generation and Utah‑only filtering
+
+#### `_env(key, default=None)` / `_parse_int_env(key, default)`
+
+- Helpers to read string and integer environment variables with safe defaults for:
+  - `LISTINGS_DB`, `BUILD_PAGE_OUTPUT`, `PRICE_MAX`, `PRICE_MIN`.
+
+#### `_thirty_days_ago_iso()`
+
+- Compute the ISO timestamp for “now minus 30 days” in UTC; used as the `last_seen` cutoff for which listings are considered “in range” for display.
+
+#### `_is_clearly_utah(address_raw)`
+
+- Heuristic filter for Utah‑only listings:
+  - Returns `True` when the address string clearly includes “utah” or an obvious `UT` state marker.
+  - Returns `False` for empty/unknown addresses or clearly non‑Utah strings.
+
+#### `_delete_non_utah_rows(conn)`
+
+- Clean up pass that deletes rows from `listings` whose `address_raw` fails `_is_clearly_utah`.
+- Keeps the DB and rendered page focused on Utah Valley.
+
+#### `_format_run_ts(iso_ts)`
+
+- Parse a `run_status.last_run_ts`‑style ISO string and format it as `YYYY-MM-DD HH:MM UTC`, falling back to the raw string or `—` on error.
+
+#### `build_page()`
+
+- Main Phase‑1 function:
+  - Resolve DB path and output directory from env (`LISTINGS_DB`, `BUILD_PAGE_OUTPUT`).
+  - Parse price limits from env (`PRICE_MIN`, `PRICE_MAX`) with defaults.
+  - Compute the 30‑day cutoff timestamp.
+  - Open the DB via `get_connection`.
+  - Delete clearly non‑Utah listings via `_delete_non_utah_rows`.
+  - Query `listings` for rows where:
+    - `last_seen >= cutoff`, and
+    - `price` is `NULL` **or** `PRICE_MIN <= price <= PRICE_MAX`.
+  - Read `run_status` via `get_run_status`.
+  - Build an HTML document with:
+    - A “Run status” section summarizing the latest ingest.
+    - A “Listings” section with each listing’s link, price, beds/baths, and address.
+  - Write `index.html` under `BUILD_PAGE_OUTPUT` (defaults to `docs/index.html`).
+  - Call `update_run_status_after_build_page(conn, displayed=len(rows))`.
+
+---
+
+### `main.py` – orchestrator and DB inspector
+
+#### `print_listings(db_path)`
+
+- Open the DB via `get_connection`, fetch all rows from `listings` ordered by `id`, and print a human‑readable summary including source, IDs, title, link, price, beds/baths, address, and timestamps.
+
+#### `main()`
+
+- Orchestrate the happy path:
+  - Resolve `db_path` from `LISTINGS_DB` / `DEFAULT_DB` via `_env` from `ingest_records.py`.
+  - Call `ingest_all_downloaded_from_history(db_path)` to ingest any snapshots whose latest state is `"downloaded"`.
+  - Print how many records were ingested.
+  - Call `print_listings(db_path)` for a quick DB inspection.
+  - Call `build_static_page()` (aliased from `build_page.build_page`) to regenerate the static HTML page.
+
+**CLI:** `python main.py` – assumes you have already run `scrape.py` and `scrape_download.py` to trigger and download snapshots.
+
+---
+
+### `scrape.py` – trigger snapshots and log history
+
+This is a script‑style module (no top‑level functions) that:
+
+- Loads `BRIGHTDATA_API_KEY` from the environment and exits if missing.
+- Builds a Bright Data Dataset API `trigger` URL with:
+  - `dataset_id=gd_lvt9iwuh6fbcwmx1a`
+  - `type=discover_new`, `discover_by=keyword`
+  - `limit_per_input` (default 10; adjust for production)
+- Sends a POST request with a payload containing one input:
+  - `keyword: "Apartment"`
+  - `city: "Provo, UT"`
+  - `radius: 20`
+  - `date_listed: ""`
+- On success:
+  - Prints the JSON response.
+  - Extracts `snapshot_id` / `snapshot_ID`.
+  - Appends a line to `snapshot_history.jsonl` with `status: "initiated"` and timestamps.
+
+---
+
+### `scrape_download.py` – check snapshot status and download JSON
+
+#### `_append_history(snapshot_id, status)`
+
+- Append a record to `snapshot_history.jsonl` with `snapshot_id`, `status` (e.g. `"running"`, `"downloaded"`), and timestamps.
+
+#### `_latest_snapshot_id()`
+
+- Read `snapshot_history.jsonl`, scanning from the end to find the latest `snapshot_id` that does **not** already have a `"downloaded"` state.
+- Exit with an error message if none can be found.
+
+#### Script flow
+
+- Load `BRIGHTDATA_API_KEY` from env and exit if missing.
+- Determine the snapshot id:
+  - If an argument is provided: use `sys.argv[1]`.
+  - Otherwise: call `_latest_snapshot_id()` and print which snapshot is being used.
+- Call `GET {PROGRESS_URL}/{snapshot_id}`:
+  - If 404: report and exit with non‑zero code.
+  - Otherwise: parse JSON, print status, and:
+    - If `status != "ready"`: append `"running"` to history and exit without downloading.
+    - If `status == "ready"`: proceed to download.
+- Call `GET {SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}?format=json`:
+  - If 202: report “not ready at download time” and exit.
+  - On success:
+    - Save the payload to `marketplace_snapshot_{snapshot_id}.json`.
+    - Count approximate records (handles both list and common object‑with‑array shapes) and print the count.
+    - Append `"downloaded"` to history via `_append_history`.
+
+---
+
 ### Test suite (`tests/`)
 
 The project uses **pytest** with a modest but focused test suite aligned with the Phase 0 plan.
