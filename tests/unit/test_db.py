@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import sqlite3
 
-from db import (
+from uvrental.db import (
     get_connection,
     init_schema,
     normalize_address,

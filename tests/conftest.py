@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-# Ensure project root is importable (for db, fetch, etc.)
+# Ensure project root is importable (for uvrental, etc.)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from db import get_connection
+from uvrental.db import get_connection
 
 
 @pytest.fixture

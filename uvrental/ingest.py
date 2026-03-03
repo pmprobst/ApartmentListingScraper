@@ -2,8 +2,8 @@
 Snapshot ingestion and normalization utilities.
 
 This module is responsible for taking JSON snapshots from Bright Data
-(downloaded separately by `scrape.py` / `scrape_download.py`), normalizing
-records, and upserting them into the SQLite DB while updating run_status.
+(downloaded separately by scrape scripts), normalizing records, and
+upserting them into the SQLite DB while updating run_status.
 """
 
 import hashlib
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from db import (
+from .db import (
     get_connection,
     upsert_listing,
     update_run_status_after_fetch,
@@ -30,8 +30,8 @@ log = logging.getLogger(__name__)
 LISTINGS_DB = "LISTINGS_DB"
 DEFAULT_DB = "listings.db"
 
-# Snapshot history (shared with scrape.py / scrape_download.py)
-SNAPSHOT_HISTORY_PATH = Path(__file__).with_name("snapshot_history.jsonl")
+# Snapshot history lives at the project root alongside the package.
+SNAPSHOT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "snapshot_history.jsonl"
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -96,7 +96,6 @@ def _address_raw(record: dict) -> str | None:
     return None
 
 
-# Canonical Marketplace URL format (Facebook expects this for item pages)
 MARKETPLACE_ITEM_BASE = "https://www.facebook.com/marketplace/item"
 
 
@@ -109,10 +108,8 @@ def _numeric_listing_id(record: dict) -> str | None:
         s = str(val).strip()
         if s.isdigit():
             return s
-        # Sometimes ID is in a sub-dict or has prefix
         if s and s.replace("-", "").isdigit():
             return s
-    # Try to parse from URL (e.g. .../marketplace/item/123456 or .../item/123)
     raw = record.get("link") or record.get("url") or record.get("listing_url") or ""
     if not raw:
         return None
@@ -127,7 +124,6 @@ def _numeric_listing_id(record: dict) -> str | None:
 
 def normalize_record(record: dict) -> dict:
     """Map Bright Data / Marketplace record to our listing fields."""
-    # Prefer canonical URL built from numeric ID (Facebook expects marketplace/item/ID)
     numeric_id = _numeric_listing_id(record)
     if numeric_id:
         link = f"{MARKETPLACE_ITEM_BASE}/{numeric_id}/"
@@ -161,10 +157,6 @@ def normalize_record(record: dict) -> dict:
 def _load_snapshot_payload(payload: object) -> list[dict]:
     """
     Normalize various Bright Data snapshot shapes into a flat list of records.
-
-    Accepts either:
-    - a list of dicts, or
-    - a dict with an array field such as data/results/listings/items/records.
     """
     if isinstance(payload, list):
         return [r for r in payload if isinstance(r, dict)]
@@ -179,7 +171,7 @@ def _load_snapshot_payload(payload: object) -> list[dict]:
 
 def load_snapshot_file(path: str | Path) -> list[dict]:
     """
-    Load a snapshot JSON file (saved by scrape_download.py) and return records.
+    Load a snapshot JSON file (saved by scrape scripts) and return records.
     """
     p = Path(path)
     with p.open("r", encoding="utf-8") as f:
@@ -192,8 +184,6 @@ def load_snapshot_file(path: str | Path) -> list[dict]:
 def ingest_records(db_path: str, records: list[dict]) -> int:
     """
     Normalize and upsert records into SQLite, updating run_status.
-
-    Returns the number of processed (non-thrown) records.
     """
     if not records:
         log.warning("No records to ingest")
@@ -209,7 +199,6 @@ def ingest_records(db_path: str, records: list[dict]) -> int:
             if not isinstance(rec, dict):
                 thrown += 1
                 continue
-            # Skip Bright Data error entries (e.g. "Redirect to login page", bad_input)
             if rec.get("error") is not None or rec.get("error_code") is not None:
                 thrown += 1
                 continue
@@ -314,16 +303,6 @@ def ingest_all_downloaded_from_history(
 ) -> int:
     """
     Ingest snapshot JSON files into the DB based on snapshot history.
-
-    If `snapshot_id` is provided, only ingest that snapshot when its latest
-    status in history is "downloaded". If no matching downloaded entry is
-    found, nothing is ingested.
-
-    If `snapshot_id` is None, find all snapshots whose latest history status
-    is "downloaded", ingest their JSON files into the DB, and mark them as
-    "ingested".
-
-    Returns the total number of records ingested across all snapshots.
     """
     if db_path is None:
         db_path = _env(LISTINGS_DB, DEFAULT_DB)
@@ -333,7 +312,6 @@ def ingest_all_downloaded_from_history(
         log.info("No snapshot history entries found.")
         return 0
 
-    # Determine which snapshot ids to process.
     if snapshot_id is not None:
         rec = states.get(snapshot_id)
         if not rec:
@@ -357,7 +335,7 @@ def ingest_all_downloaded_from_history(
 
     total_ingested = 0
     for sid in snapshot_ids:
-        snapshot_path = Path(f"marketplace_snapshot_{sid}.json")
+        snapshot_path = Path(__file__).resolve().parents[1] / f"marketplace_snapshot_{sid}.json"
         if not snapshot_path.exists():
             log.warning(
                 "Snapshot file %s for id %s not found; skipping.", snapshot_path, sid
@@ -420,7 +398,6 @@ def run_fetch_dry_run(db_path: str) -> int:
 
 
 if __name__ == "__main__":
-    # CLI: ingest all snapshots marked as 'downloaded' in snapshot_history.jsonl.
     db_path = _env(LISTINGS_DB, DEFAULT_DB)
     n = ingest_all_downloaded_from_history(db_path)
     if n == 0:

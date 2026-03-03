@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from db import get_connection
+from uvrental.db import get_connection
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -22,7 +22,7 @@ def test_main_populates_db_and_prints_listings(tmp_db_path, env_vars):
     env["LISTINGS_DB"] = db_path
 
     result = subprocess.run(
-        [sys.executable, "main.py"],
+        [sys.executable, "scripts/run_pipeline.py"],
         cwd=str(PROJECT_ROOT),
         env=env,
         capture_output=True,

@@ -16,7 +16,7 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
 
 ## Components and responsibilities
 
-### `db.py` – SQLite schema and upsert logic
+### `uvrental.db` – SQLite schema and upsert logic
 
 - Defines the **`listings`** table and enforces deduplication within each source.
 - Key pieces:
@@ -41,9 +41,9 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
 
 ---
 
-### `fetch.py` – Bright Data → SQLite (Phase 0 pipeline)
+### `uvrental.ingest` – Bright Data snapshots → SQLite (Phase 0 pipeline)
 
-`fetch.py` implements the main data pipeline for **Facebook Marketplace via Bright Data’s Dataset / Web Scraper API**.
+`uvrental.ingest` implements the main data pipeline for **Facebook Marketplace snapshots downloaded from Bright Data**.
 
 - **Environment and defaults**
   - Uses `python-dotenv` to load `.env`.
@@ -142,7 +142,7 @@ python main.py             # real Bright Data fetch, then print listings
 
 ---
 
-### `build_page.py` and run_status (Phase 1)
+### `uvrental.build_page` and run_status (Phase 1)
 
 Phase 1 adds **run status** tracking and a **static HTML page** generated from the SQLite DB.
 
@@ -161,9 +161,9 @@ Phase 1 adds **run status** tracking and a **static HTML page** generated from t
 
 ---
 
-### `scrape.py` and `scrape_download.py` – Experimental Scraper API helpers
+### `uvrental.brightdata` and `uvrental.brightdata_download` – Bright Data helpers
 
-These two scripts are **standalone helpers** for working directly with Bright Data’s **Scraper API / Crawl API** separate from the main `fetch.py` Dataset pipeline. They are useful for ad‑hoc experiments and for debugging Bright Data behavior.
+These two modules are used by the CLI scripts under `scripts/` to work with Bright Data’s Dataset API.
 
 #### `scrape.py` – trigger + history log
 

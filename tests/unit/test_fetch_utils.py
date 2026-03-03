@@ -1,4 +1,4 @@
-from ingest_records import (
+from uvrental.ingest import (
     MARKETPLACE_ITEM_BASE,
     _address_raw,
     _norm_num,

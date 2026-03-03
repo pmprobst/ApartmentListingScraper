@@ -22,7 +22,7 @@ Application that regularly skims online rental markets in Utah Valley to identif
 | Storage | **SQLite** (python `sqlite3`) | Listings and metadata; stored in a **separate private repo** (not in the public repo). |
 | Scheduling | **GitHub Actions** | Schedule (e.g. every 12 hours); fetch → Claude extraction → build_page; push to Pages. Secrets in GitHub Secrets. |
 | LLM extraction | **Claude API** | Run only on new listings within price/parameter filter. Prototype separately first. |
-| Interaction | **Scripts** | `scrape.py`, `scrape_download.py`, `ingest_records.py`, `build_page.py`; run locally or via GitHub Actions. |
+| Interaction | **Scripts** | `scripts/scrape.py`, `scripts/scrape_download.py`, `scripts/run_pipeline.py`; run locally or via GitHub Actions. |
 | Output | **GitHub-hosted webpage** | Static HTML; run status indicator on page. |
 
 - **Bright Data:** Facebook Marketplace Scraper API; normalize response and save to SQLite. Rollout: Facebook Marketplace → Zillow → KSL → Apartments.com.

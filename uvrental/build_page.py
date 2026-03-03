@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from db import (
+from .db import (
     get_connection,
     get_run_status,
     update_run_status_after_build_page,
@@ -18,7 +18,6 @@ from db import (
 
 load_dotenv()
 
-# Env keys (optional with defaults)
 LISTINGS_DB = "LISTINGS_DB"
 BUILD_PAGE_OUTPUT = "BUILD_PAGE_OUTPUT"
 PRICE_MAX = "PRICE_MAX"
@@ -52,34 +51,22 @@ def _thirty_days_ago_iso() -> str:
 def _is_clearly_utah(address_raw: str | None) -> bool:
     """
     Heuristic filter for Utah-only listings.
-
-    - Returns True if the address clearly mentions Utah (\"Utah\" or state code UT).
-    - Returns False otherwise (including empty/unknown or clearly non-US).
-
-    This is intentionally strict: if we cannot see a clear Utah signal,
-    we treat the listing as non-Utah and drop it.
     """
     if address_raw is None:
         return False
     s = address_raw.strip().lower()
     if not s:
         return False
-
-    # Explicit Utah matches
     if "utah" in s:
         return True
     if ", ut" in s or s.endswith(" ut") or ", ut " in s or " ut " in s:
         return True
-
     return False
 
 
 def _delete_non_utah_rows(conn) -> None:
     """
     Delete listings whose address is clearly outside Utah.
-
-    This is a coarse cleanup step so that the DB and the rendered page
-    stay focused on Utah Valley. It is safe to run on every build.
     """
     rows = conn.execute("SELECT id, address_raw FROM listings").fetchall()
     to_delete = [
@@ -116,11 +103,8 @@ def build_page() -> None:
 
     conn = get_connection(db_path)
     try:
-        # Clean out listings that are clearly outside Utah before querying.
         _delete_non_utah_rows(conn)
 
-        # Listings: within price range and within 30-day window
-        # Include rows where price is NULL so we don't hide listings missing price
         rows = conn.execute(
             """
             SELECT id, source, source_listing_id, link, title, price, beds, baths,
@@ -148,7 +132,6 @@ def build_page() -> None:
             "  <h1>Utah Valley Rentals</h1>",
         ]
 
-        # Run status banner
         html_parts.append("  <section class=\"run-status\" aria-label=\"Run status\">")
         html_parts.append("    <h2>Run status</h2>")
         if run is None:
@@ -158,7 +141,9 @@ def build_page() -> None:
             )
         else:
             success_str = "success" if run["success"] else "failure"
-            html_parts.append(f"    <p><strong>Last run:</strong> {_format_run_ts(run['last_run_ts'])} ({success_str})</p>")
+            html_parts.append(
+                f"    <p><strong>Last run:</strong> {_format_run_ts(run['last_run_ts'])} ({success_str})</p>"
+            )
             html_parts.append("    <ul>")
             html_parts.append(f"      <li>Scraped: {run['scraped']}</li>")
             html_parts.append(f"      <li>Thrown: {run['thrown']}</li>")
@@ -172,7 +157,6 @@ def build_page() -> None:
             html_parts.append("    </ul>")
         html_parts.append("  </section>")
 
-        # Listings
         html_parts.append("  <section class=\"listings\" aria-label=\"Listings\">")
         html_parts.append("    <h2>Listings</h2>")
         if not rows:
@@ -186,12 +170,12 @@ def build_page() -> None:
                 beds_str = str(r["beds"]) if r["beds"] is not None else "—"
                 baths_str = str(r["baths"]) if r["baths"] is not None else "—"
                 addr = (r["address_raw"] or "").replace("<", "&lt;").replace(">", "&gt;")
-                html_parts.append(f"      <li>")
+                html_parts.append("      <li>")
                 html_parts.append(f"        <a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a>")
                 html_parts.append(f"        — {price_str} | {beds_str} bed, {baths_str} bath")
                 if addr:
                     html_parts.append(f"        | {addr}")
-                html_parts.append(f"      </li>")
+                html_parts.append("      </li>")
             html_parts.append("    </ul>")
         html_parts.append("  </section>")
 
@@ -208,3 +192,4 @@ def build_page() -> None:
 
 if __name__ == "__main__":
     build_page()
+

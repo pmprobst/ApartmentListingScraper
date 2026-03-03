@@ -54,8 +54,7 @@ def normalize_address(raw: str | None) -> str:
         return ""
     parts = s.split()
     out = []
-    for i, part in enumerate(parts):
-        # Last token might be a suffix (e.g. "123 main st")
+    for part in parts:
         normalized = SUFFIX_MAP.get(part, part)
         out.append(normalized)
     return " ".join(out)
@@ -71,7 +70,8 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     """Create core tables if they do not exist. Idempotent."""
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS listings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source TEXT NOT NULL,
@@ -89,8 +89,10 @@ def init_schema(conn: sqlite3.Connection) -> None:
             canonical_listing_id INTEGER,
             UNIQUE(source, source_listing_id)
         )
-    """)
-    conn.execute("""
+    """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS run_status (
             id INTEGER PRIMARY KEY,
             last_run_ts TEXT NOT NULL,
@@ -105,7 +107,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
             llm_processed INTEGER NOT NULL,
             displayed INTEGER NOT NULL
         )
-    """)
+    """
+    )
     conn.commit()
 
 
@@ -150,10 +153,10 @@ def upsert_listing(
         try:
             extracted_json = json.dumps(extracted, ensure_ascii=False, sort_keys=True)
         except TypeError:
-            # Fallback: store string representation if value is not JSON-serializable
             extracted_json = str(extracted)
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO listings (
             source, source_listing_id, normalized_address, address_raw, link, title,
             price, beds, baths, first_seen, last_seen, extracted, canonical_listing_id
@@ -168,23 +171,23 @@ def upsert_listing(
             baths = excluded.baths,
             last_seen = excluded.last_seen,
             extracted = COALESCE(excluded.extracted, listings.extracted)
-    """, (
-        source,
-        source_listing_id,
-        normalized_address or None,
-        address_raw or None,
-        link,
-        title,
-        price,
-        beds,
-        baths,
-        now,
-        now,
-        extracted_json,
-    ))
-    # first_seen is only set on INSERT; DO UPDATE leaves it unchanged
+    """,
+        (
+            source,
+            source_listing_id,
+            normalized_address or None,
+            address_raw or None,
+            link,
+            title,
+            price,
+            beds,
+            baths,
+            now,
+            now,
+            extracted_json,
+        ),
+    )
 
-    # Cross-source dedup (Phase 0): if same normalized_address exists for another source, link via canonical_listing_id
     norm = (normalized_address or "").strip()
     if norm:
         row = conn.execute(
@@ -194,9 +197,14 @@ def upsert_listing(
         if row:
             our_id = row[0]
             other = conn.execute(
-                """SELECT id FROM listings
-                   WHERE normalized_address = ? AND source != ? AND normalized_address IS NOT NULL AND normalized_address != ''
-                   ORDER BY id LIMIT 1""",
+                """
+                SELECT id FROM listings
+                WHERE normalized_address = ?
+                  AND source != ?
+                  AND normalized_address IS NOT NULL
+                  AND normalized_address != ''
+                ORDER BY id LIMIT 1
+                """,
                 (norm, source),
             ).fetchone()
             if other:
@@ -219,15 +227,11 @@ def update_run_status_after_fetch(
 ) -> None:
     """
     Update run_status after fetch has completed.
-
-    - scraped: total records returned by the API.
-    - thrown: records skipped (errors, empty, invalid).
-    - duplicate: records that already existed in DB (updated).
-    - added: records newly inserted into DB this run.
-    - total_count: total rows in listings after the run.
     """
     now = _now_iso()
-    row = conn.execute("SELECT id, llm_processed, displayed FROM run_status WHERE id = 1").fetchone()
+    row = conn.execute(
+        "SELECT id, llm_processed, displayed FROM run_status WHERE id = 1"
+    ).fetchone()
     llm_processed = int(row["llm_processed"]) if row is not None else 0
     displayed = int(row["displayed"]) if row is not None else 0
 
@@ -301,7 +305,6 @@ def update_run_status_after_llm(
     now = _now_iso()
     row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
     if row is None:
-        # Initialize with zeros for all fetch/display fields.
         conn.execute(
             """
             INSERT INTO run_status (
@@ -338,7 +341,6 @@ def update_run_status_after_build_page(
     now = _now_iso()
     row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
     if row is None:
-        # Initialize with zeros for all fetch/LLM fields.
         conn.execute(
             """
             INSERT INTO run_status (

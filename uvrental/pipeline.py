@@ -1,19 +1,10 @@
 """
-Main entry point for ingesting the latest snapshot into the DB and building HTML.
-Usage: python main.py
+High-level orchestration helpers for running the ingestion + build pipeline.
 """
-import os
-import sys
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# Add project root for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from db import get_connection
-from build_page import build_page as build_static_page
-from ingest_records import LISTINGS_DB, DEFAULT_DB, _env, ingest_all_downloaded_from_history
+from .db import get_connection
+from .build_page import build_page as build_static_page
+from .ingest import LISTINGS_DB, DEFAULT_DB, _env, ingest_all_downloaded_from_history
 
 
 def print_listings(db_path: str) -> None:
@@ -21,7 +12,8 @@ def print_listings(db_path: str) -> None:
     conn = get_connection(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, source, source_listing_id, title, link, price, beds, baths, address_raw, first_seen, last_seen FROM listings ORDER BY id"
+            "SELECT id, source, source_listing_id, title, link, price, beds, baths, "
+            "address_raw, first_seen, last_seen FROM listings ORDER BY id"
         ).fetchall()
         if not rows:
             print("No listings in DB.")
@@ -50,7 +42,11 @@ def print_listings(db_path: str) -> None:
         conn.close()
 
 
-def main() -> None:
+def run_pipeline() -> None:
+    """
+    Ingest all downloaded snapshots into the DB, print listing summary,
+    and build the static HTML page.
+    """
     print("Ingesting all downloaded snapshots into DB...\n")
     db_path = _env(LISTINGS_DB, DEFAULT_DB)
     n = ingest_all_downloaded_from_history(db_path)
@@ -64,4 +60,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_pipeline()
+
