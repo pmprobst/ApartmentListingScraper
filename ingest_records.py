@@ -309,10 +309,19 @@ def _latest_snapshot_states() -> dict[str, dict]:
     return states
 
 
-def ingest_all_downloaded_from_history(db_path: str | None = None) -> int:
+def ingest_all_downloaded_from_history(
+    db_path: str | None = None, snapshot_id: str | None = None
+) -> int:
     """
-    Find all snapshots whose latest history status is 'downloaded',
-    ingest their JSON files into the DB, and mark them as 'ingested'.
+    Ingest snapshot JSON files into the DB based on snapshot history.
+
+    If `snapshot_id` is provided, only ingest that snapshot when its latest
+    status in history is "downloaded". If no matching downloaded entry is
+    found, nothing is ingested.
+
+    If `snapshot_id` is None, find all snapshots whose latest history status
+    is "downloaded", ingest their JSON files into the DB, and mark them as
+    "ingested".
 
     Returns the total number of records ingested across all snapshots.
     """
@@ -324,21 +333,40 @@ def ingest_all_downloaded_from_history(db_path: str | None = None) -> int:
         log.info("No snapshot history entries found.")
         return 0
 
-    total_ingested = 0
-    for snapshot_id, rec in states.items():
+    # Determine which snapshot ids to process.
+    if snapshot_id is not None:
+        rec = states.get(snapshot_id)
+        if not rec:
+            log.warning("Snapshot id %s not found in history; nothing to ingest.", snapshot_id)
+            return 0
         status = (rec.get("status") or "").lower()
         if status != "downloaded":
-            continue
-        snapshot_path = Path(f"marketplace_snapshot_{snapshot_id}.json")
+            log.info(
+                "Snapshot %s has latest status '%s' (not 'downloaded'); nothing to ingest.",
+                snapshot_id,
+                status,
+            )
+            return 0
+        snapshot_ids = [snapshot_id]
+    else:
+        snapshot_ids = [
+            sid
+            for sid, rec in states.items()
+            if (rec.get("status") or "").lower() == "downloaded"
+        ]
+
+    total_ingested = 0
+    for sid in snapshot_ids:
+        snapshot_path = Path(f"marketplace_snapshot_{sid}.json")
         if not snapshot_path.exists():
             log.warning(
-                "Snapshot file %s for id %s not found; skipping.", snapshot_path, snapshot_id
+                "Snapshot file %s for id %s not found; skipping.", snapshot_path, sid
             )
             continue
-        log.info("Ingesting downloaded snapshot %s from %s", snapshot_id, snapshot_path)
+        log.info("Ingesting downloaded snapshot %s from %s", sid, snapshot_path)
         n = ingest_snapshot_file(db_path, snapshot_path)
         total_ingested += n
-        _append_history(snapshot_id, "ingested")
+        _append_history(sid, "ingested")
 
     if total_ingested == 0:
         log.info("No downloaded snapshots needed ingestion.")

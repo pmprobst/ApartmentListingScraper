@@ -1,3 +1,132 @@
+import json
+import os
+import time
+from typing import Any, Dict, List
+
+from claude_extraction_prompt import (
+    EXAMPLE_INPUT_1,
+    EXAMPLE_INPUT_2,
+    EXAMPLE_INPUT_3,
+    build_extraction_messages,
+)
+
+
+def _example_listings() -> List[Dict[str, Any]]:
+    return [
+        {
+            "title": "Spacious 2BR Apartment near BYU – In-unit Laundry",
+            "description": EXAMPLE_INPUT_1,
+            "price": 1350,
+            "beds": 2,
+            "baths": 1,
+            "address_raw": "Provo, UT",
+        },
+        {
+            "title": "Private Room in 4BR Student House – Utilities Split",
+            "description": EXAMPLE_INPUT_2,
+            "price": 650,
+            "beds": 1,
+            "baths": 1,
+            "address_raw": "Orem, UT",
+        },
+        {
+            "title": "Studio Apartment – Downtown Provo",
+            "description": EXAMPLE_INPUT_3,
+            "price": 900,
+            "beds": 0,
+            "baths": 1,
+            "address_raw": "Provo, UT",
+        },
+    ]
+
+
+EXPECTED_KEYS = [
+    "washer_dryer",
+    "renter_paid_fees",
+    "availability",
+    "pet_policy",
+    "parking",
+    "lease_length",
+    "deposit",
+    "application_fees",
+    "furnished",
+    "square_footage",
+    "roommates",
+    "subletting",
+    "contact",
+    "move_in_incentives",
+    "amenities",
+    "restrictions",
+    "location_detail",
+]
+
+
+def _validate_output(obj: Any) -> None:
+    if not isinstance(obj, dict):
+        raise ValueError(f"Expected JSON object, got {type(obj)!r}")
+
+    missing = [k for k in EXPECTED_KEYS if k not in obj]
+    if missing:
+        raise ValueError(f"Missing keys in extraction: {missing}")
+
+
+def _create_client():
+    try:
+        from anthropic import Anthropic
+    except ImportError as exc:
+        raise SystemExit(
+            "anthropic package is not installed. "
+            "Run `pip install anthropic` in your environment."
+        ) from exc
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise SystemExit("ANTHROPIC_API_KEY is not set in the environment.")
+
+    return Anthropic(api_key=api_key)
+
+
+def run_prototype(model: str = "claude-3-5-haiku-20241022") -> None:
+    client = _create_client()
+    listings = _example_listings()
+
+    total_start = time.time()
+
+    for idx, listing in enumerate(listings, start=1):
+        print(f"\n=== Listing {idx} ===")
+        messages = build_extraction_messages(listing)
+
+        start = time.time()
+        response = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            temperature=0.1,
+            messages=messages,
+        )
+        elapsed = time.time() - start
+
+        # Anthropics Python SDK returns a content list; assume a single text block.
+        text_parts = [c.text for c in response.content if getattr(c, "type", "") == "text"]
+        raw = "".join(text_parts).strip()
+
+        print(f"Raw JSON response ({elapsed:.2f}s):")
+        print(raw)
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Failed to parse JSON: {exc}") from exc
+
+        _validate_output(data)
+        print("Parsed and validated JSON keys OK.")
+
+    total_elapsed = time.time() - total_start
+    print(f"\nProcessed {len(listings)} listings in {total_elapsed:.2f}s total.")
+
+
+if __name__ == "__main__":
+    run_prototype()
+
 """
 Claude API prototype for structured extraction from rental listing text.
 
