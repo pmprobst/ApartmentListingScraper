@@ -23,7 +23,7 @@ include_errors = true                 # boolean: include errors in response
 
 [claude]
 # Claude API extraction (key from env ANTHROPIC_API_KEY or GitHub Secret)
-model = "claude-3-5-sonnet-20241022"  # string: model name
+model = "claude-sonnet-4-6"           # string: model name
 timeout_seconds = 60                  # integer: request timeout
 extract_fields = "all"                 # string: "all" or comma-separated list of field names to extract
 

@@ -38,10 +38,10 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 
 ## Requirements to pass before moving to Phase 2
 
-- [ ] **run_status** is stored (SQLite table or file) and updated by fetch.py after each run (timestamp, success/failure, total count, N new, M updated; optionally K removed).
-- [ ] **Price filter** is applied: build_page.py only includes listings within configured price_max (and optional price_min).
+- [x] **run_status** is stored (SQLite table or file) and updated by ingest_records.py after each run (timestamp, success/failure, total count, N new, M updated; optionally K removed).
+- [x] **Price filter** is applied: build_page.py only includes listings within configured price_max (and optional price_min).
 - [x] **30-day phased removal** is implemented: listings with last_seen older than 30 days are excluded at read time (view-based); build_page shows only listings within the 30-day window (and price range). K removed in run_status is optional and not implemented.
-- [ ] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list (filtered by price and 30-day window) and run status indicator.
-- [ ] **End-to-end** (fetch → build_page) runs locally and produces a valid HTML page with at least one listing and run status visible.
+- [x] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list (filtered by price and 30-day window) and run status indicator.
+- [x] **End-to-end** (fetch → build_page) runs locally and produces a valid HTML page with at least one listing and run status visible.
 
 When all checkboxes are satisfied, proceed to [phase-2.md](phase-2.md).
