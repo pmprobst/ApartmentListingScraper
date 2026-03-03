@@ -27,7 +27,7 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
     - `link`, `title`, `price`, `beds`, `baths`
     - `first_seen`, `last_seen`
     - `extracted` (JSON/text from LLM extraction, nullable)
-    - `canonical_listing_id` (for future cross‑source merge)
+    - `canonical_listing_id` – set automatically when another row with the same normalized_address and a different source exists (cross‑source dedup).
     - `UNIQUE(source, source_listing_id)` – one row per listing per source.
   - `normalize_address(raw)`: normalizes addresses (lowercase, strip punctuation, collapse whitespace, standardize street suffixes such as `st → street`, `ave → avenue`, etc.). Used for deduplication.
   - `upsert_listing(conn, ...)`:
@@ -55,6 +55,7 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
       - `BRIGHTDATA_KEYWORD` (default: `"Apartment"`)
       - `BRIGHTDATA_CITY` (default: `"Provo, UT"`)
       - `BRIGHTDATA_RADIUS_MILES` (default: `20`) – restricts listings to ~20 miles around the city to save tokens.
+      - `BRIGHTDATA_LIMIT_PER_INPUT` (default: `100`) – caps how many records are collected per input (e.g. 100 for testing, 1000 for production).
   - Helper `_env(key, default)` ensures env values are stripped and fall back to provided defaults.
 
 - **Bright Data API interaction**
@@ -257,7 +258,7 @@ The project uses **pytest** with a modest but focused test suite aligned with th
   - `BRIGHT_DATA_API_KEY` – required by `scrape.py` / `scrape_download.py`.
   - `BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY` and/or `BRIGHTDATA_API_KEY` – required by `fetch.py` / `main.py` for the Dataset pipeline.
   - `LISTINGS_DB` – optional DB path override; defaults to `listings.db`.
-  - `BRIGHTDATA_DATASET_ID`, `BRIGHTDATA_KEYWORD`, `BRIGHTDATA_CITY` – optional Bright Data parameters for Phase 0.
+  - `BRIGHTDATA_DATASET_ID`, `BRIGHTDATA_KEYWORD`, `BRIGHTDATA_CITY`, `BRIGHTDATA_RADIUS_MILES`, `BRIGHTDATA_LIMIT_PER_INPUT` – optional Bright Data parameters for Phase 0.
 
 **Security note:** `.env` is gitignored; API keys and secrets should never be committed. In CI (e.g. GitHub Actions), these values will be provided via **GitHub Secrets**.
 

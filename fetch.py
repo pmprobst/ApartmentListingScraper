@@ -336,7 +336,6 @@ def run_fetch(
                 beds=norm.get("beds"),
                 baths=norm.get("baths"),
                 address_raw=norm.get("address_raw"),
-                extracted=rec,
             )
             n += 1
         return n

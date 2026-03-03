@@ -62,6 +62,12 @@ def _fetch_single_listing(conn: sqlite3.Connection):
     return cur.fetchone()
 
 
+def _fetch_listing_ids(conn: sqlite3.Connection):
+    """Fetch id and canonical_listing_id for all listings (for cross-source tests)."""
+    cur = conn.execute("SELECT id, source, canonical_listing_id FROM listings ORDER BY id")
+    return cur.fetchall()
+
+
 def test_upsert_listing_inserts_and_updates(tmp_path):
     db_path = tmp_path / "upsert_test.db"
     conn = get_connection(str(db_path))
@@ -138,6 +144,44 @@ def test_upsert_listing_coalesces_extracted(tmp_path):
         )
         row2 = _fetch_single_listing(conn)
         assert row2["extracted"] == '{"foo": "bar"}'
+    finally:
+        conn.close()
+
+
+def test_upsert_listing_sets_canonical_listing_id_when_same_address_different_source(tmp_path):
+    """Cross-source dedup: same normalized_address, different source -> link via canonical_listing_id."""
+    db_path = tmp_path / "cross_source.db"
+    conn = get_connection(str(db_path))
+    try:
+        # First listing (Facebook) - same address will normalize to "123 main street provo ut"
+        upsert_listing(
+            conn,
+            source="facebook_marketplace",
+            source_listing_id="fb1",
+            link="https://facebook.com/marketplace/item/1",
+            address_raw="123 Main St, Provo UT",
+            title="Apartment",
+        )
+        rows = _fetch_listing_ids(conn)
+        assert len(rows) == 1
+        fb_id = rows[0]["id"]
+        assert rows[0]["canonical_listing_id"] is None
+
+        # Second listing (Zillow) - same normalized address, different source
+        upsert_listing(
+            conn,
+            source="zillow",
+            source_listing_id="z1",
+            link="https://zillow.com/listing/1",
+            address_raw="123 Main Street, Provo UT",
+            title="Same place on Zillow",
+        )
+        rows = _fetch_listing_ids(conn)
+        assert len(rows) == 2
+        # Facebook row still has no canonical (it was first). Zillow row should point to Facebook's id.
+        by_source = {r["source"]: r for r in rows}
+        assert by_source["facebook_marketplace"]["canonical_listing_id"] is None
+        assert by_source["zillow"]["canonical_listing_id"] == fb_id
     finally:
         conn.close()
 

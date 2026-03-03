@@ -115,6 +115,9 @@ def upsert_listing(
     Insert or update one listing by (source, source_listing_id).
     Sets first_seen on insert, last_seen on every update.
     normalized_address is computed from address_raw if not provided.
+    When normalized_address is non-empty, if another row exists with the same
+    normalized_address and a different source, this row's canonical_listing_id
+    is set to that row's id (cross-source deduplication).
     """
     now = _now_iso()
     if normalized_address is None and address_raw:
@@ -164,4 +167,25 @@ def upsert_listing(
         extracted_json,
     ))
     # first_seen is only set on INSERT; DO UPDATE leaves it unchanged
+
+    # Cross-source dedup (Phase 0): if same normalized_address exists for another source, link via canonical_listing_id
+    norm = (normalized_address or "").strip()
+    if norm:
+        row = conn.execute(
+            "SELECT id FROM listings WHERE source = ? AND source_listing_id = ?",
+            (source, source_listing_id),
+        ).fetchone()
+        if row:
+            our_id = row[0]
+            other = conn.execute(
+                """SELECT id FROM listings
+                   WHERE normalized_address = ? AND source != ? AND normalized_address IS NOT NULL AND normalized_address != ''
+                   ORDER BY id LIMIT 1""",
+                (norm, source),
+            ).fetchone()
+            if other:
+                conn.execute(
+                    "UPDATE listings SET canonical_listing_id = ? WHERE id = ?",
+                    (other[0], our_id),
+                )
     conn.commit()

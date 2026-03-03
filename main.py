@@ -28,14 +28,10 @@ from fetch import (
     DEFAULT_LIMIT_PER_INPUT,
     DEFAULT_RADIUS_MILES,
     LISTINGS_DB,
+    _env,
     run_fetch,
     run_fetch_dry_run,
 )
-
-
-def _env(key: str, default: str | None = None) -> str:
-    v = os.environ.get(key, default or "")
-    return v.strip() if isinstance(v, str) else ""
 
 
 def run_fetch_step(dry_run: bool) -> str:
