@@ -30,16 +30,20 @@ BRIGHTDATA_DATASET_ID = "BRIGHTDATA_DATASET_ID"
 BRIGHTDATA_KEYWORD = "BRIGHTDATA_KEYWORD"
 BRIGHTDATA_CITY = "BRIGHTDATA_CITY"
 BRIGHTDATA_RADIUS_MILES = "BRIGHTDATA_RADIUS_MILES"
+BRIGHTDATA_LIMIT_PER_INPUT = "BRIGHTDATA_LIMIT_PER_INPUT"
 
 DEFAULT_DATASET_ID = "gd_lvt9iwuh6fbcwmx1a"
 DEFAULT_KEYWORD = "Apartment"
 DEFAULT_CITY = "Provo, UT"
 DEFAULT_RADIUS_MILES = 20
+# Bright Data may enforce a minimum (e.g. 100). Use 100 for testing; increase for production (e.g. 1000).
+DEFAULT_LIMIT_PER_INPUT = 100
 DEFAULT_DB = "listings.db"
 
 TRIGGER_URL = "https://api.brightdata.com/datasets/v3/trigger"
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
-SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/snapshots"
+# Match scrape_download.py: GET /datasets/v3/snapshot/{id}?format=json (no /download path)
+SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
 
 POLL_INTERVAL_SEC = 15
 POLL_TIMEOUT_SEC = 300  # 5 min
@@ -176,19 +180,22 @@ def trigger_collection(
     keyword: str,
     city: str,
     radius_miles: int = DEFAULT_RADIUS_MILES,
+    limit_per_input: int = DEFAULT_LIMIT_PER_INPUT,
 ) -> str | None:
     """Start Bright Data collection; return snapshot_id or None on failure.
-    Use city like 'Provo, UT' and radius_miles to restrict to ~20 miles around Provo, UT.
+    Use city like 'Provo, UT' and radius_miles to restrict to ~20 miles around the city.
+    limit_per_input caps how many records are collected per input (e.g. 100 for testing, 1000 for production).
     """
-    url = f"{TRIGGER_URL}?dataset_id={dataset_id}&notify=false&include_errors=true&type=discover_new&discover_by=keyword"
+    url = (
+        f"{TRIGGER_URL}?dataset_id={dataset_id}&notify=false&include_errors=true"
+        f"&type=discover_new&discover_by=keyword&limit_per_input={limit_per_input}"
+    )
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     input_item: dict[str, object] = {
         "keyword": keyword,
         "city": city,
         "radius": radius_miles,
         "date_listed": "",
-        "state": "UT",
-        "country": "US",
     }
     payload = {"input": [input_item]}
     try:
@@ -242,9 +249,10 @@ def wait_for_ready(api_key: str, snapshot_id: str) -> bool:
 
 
 def download_snapshot(api_key: str, snapshot_id: str) -> list[dict]:
-    """Download snapshot content; return list of records (empty on failure)."""
-    # API: GET /datasets/snapshots/{id}/download?format=json
-    url = f"{SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}/download"
+    """Download snapshot content; return list of records (empty on failure).
+    Uses same endpoint as scrape_download.py: GET /datasets/v3/snapshot/{id}?format=json.
+    """
+    url = f"{SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
     params = {"format": "json"}
     try:
@@ -252,7 +260,13 @@ def download_snapshot(api_key: str, snapshot_id: str) -> list[dict]:
         if r.status_code == 202:
             log.warning("Snapshot not ready (202); try again later")
             return []
-        r.raise_for_status()
+        if not r.ok:
+            try:
+                err_body = r.json()
+            except Exception:
+                err_body = r.text[:500] if r.text else "(empty)"
+            log.error("Download %s: %s %s", snapshot_id, r.status_code, err_body)
+            r.raise_for_status()
         data = r.json()
         # Response can be array or object with array inside
         if isinstance(data, list):
@@ -279,10 +293,16 @@ def run_fetch(
     keyword: str,
     city: str,
     radius_miles: int = DEFAULT_RADIUS_MILES,
+    limit_per_input: int = DEFAULT_LIMIT_PER_INPUT,
 ) -> int:
     """Trigger collection, wait for ready, download, upsert. Returns count of listings upserted."""
     snapshot_id = trigger_collection(
-        api_key, dataset_id, keyword, city, radius_miles=radius_miles
+        api_key,
+        dataset_id,
+        keyword,
+        city,
+        radius_miles=radius_miles,
+        limit_per_input=limit_per_input,
     )
     if not snapshot_id:
         return 0
@@ -300,8 +320,11 @@ def run_fetch(
         for rec in records:
             if not isinstance(rec, dict):
                 continue
+            # Skip Bright Data error entries (e.g. "Redirect to login page", bad_input)
+            if rec.get("error") is not None or rec.get("error_code") is not None:
+                continue
             norm = normalize_record(rec)
-            if not norm["link"]:
+            if not norm["link"] or norm["link"] == "https://www.facebook.com/marketplace":
                 continue
             upsert_listing(
                 conn,
@@ -313,6 +336,7 @@ def run_fetch(
                 beds=norm.get("beds"),
                 baths=norm.get("baths"),
                 address_raw=norm.get("address_raw"),
+                extracted=rec,
             )
             n += 1
         return n
@@ -388,8 +412,15 @@ def main() -> None:
         radius_miles = int(radius_str)
     except ValueError:
         radius_miles = DEFAULT_RADIUS_MILES
+    limit_str = _env(BRIGHTDATA_LIMIT_PER_INPUT, str(DEFAULT_LIMIT_PER_INPUT))
+    try:
+        limit_per_input = int(limit_str)
+    except ValueError:
+        limit_per_input = DEFAULT_LIMIT_PER_INPUT
 
-    n = run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles)
+    n = run_fetch(
+        db_path, api_key, dataset_id, keyword, city, radius_miles, limit_per_input
+    )
     log.info("Upserted %d listings into %s", n, db_path)
 
 

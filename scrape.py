@@ -16,6 +16,9 @@ headers = {
     "Content-Type": "application/json",
 }
 
+# Bright Data may enforce a minimum (e.g. 10). Use 10 for testing; increase for production (e.g. 1000).
+LIMIT_PER_INPUT = 10
+
 payload = {
     "input": [
         {
@@ -23,8 +26,6 @@ payload = {
             "city": "Provo, UT",
             "radius": 20,
             "date_listed": "",
-            "state": "UT",
-            "country": "US",
         }
     ],
 }
@@ -32,13 +33,25 @@ payload = {
 # Where we keep a history of snapshot_ids
 SNAPSHOT_HISTORY_PATH = Path(__file__).with_name("snapshot_history.jsonl")
 
+trigger_url = (
+    "https://api.brightdata.com/datasets/v3/trigger"
+    "?dataset_id=gd_lvt9iwuh6fbcwmx1a&notify=false&include_errors=true"
+    "&type=discover_new&discover_by=keyword"
+    f"&limit_per_input={LIMIT_PER_INPUT}"
+)
 response = requests.post(
-    "https://api.brightdata.com/datasets/v3/trigger?dataset_id=gd_lvt9iwuh6fbcwmx1a&notify=false&include_errors=true&type=discover_new&discover_by=keyword&limit_per_input=1000",
+    trigger_url,
     headers=headers,
     json=payload,
     timeout=60,
 )
-response.raise_for_status()
+if not response.ok:
+    try:
+        err = response.json()
+    except Exception:
+        err = response.text[:500] if response.text else "(empty)"
+    print("API error:", response.status_code, err, file=__import__("sys").stderr)
+    response.raise_for_status()
 
 data = response.json()
 print(data)

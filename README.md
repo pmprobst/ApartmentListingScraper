@@ -17,9 +17,14 @@ Skims online rental markets in Utah Valley (Bright Data → SQLite → webpage).
 
 ## Environment variables
 
-- **`BRIGHT_DATA_API_KEY`** (required for fetch): Your Bright Data API key for Facebook Marketplace. Do not commit this; use a `.env` file locally or GitHub Secrets in CI. The script also accepts 
+- **`BRIGHT_DATA_API_KEY`** or **`BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY`** or **`BRIGHTDATA_API_KEY`** (required for real fetch): Your Bright Data API key. Do not commit; use `.env` locally or GitHub Secrets in CI.
 - **`LISTINGS_DB`** (optional): Path to the SQLite database file. Default: `listings.db`.
-- **`BRIGHTDATA_DATASET_ID`**, **`BRIGHTDATA_KEYWORD`**, **`BRIGHTDATA_CITY`**, **`BRIGHTDATA_RADIUS_MILES`** (optional): Bright Data Facebook Marketplace params. Defaults: dataset `gd_lvt9iwuh6fbcwmx1a`, keyword `Apartment`, city `Provo, UT`, radius `20` miles. Used by `fetch.py` to restrict listings to ~20 miles around Provo, UT (and US-only).
+- **`BRIGHTDATA_DATASET_ID`**, **`BRIGHTDATA_KEYWORD`**, **`BRIGHTDATA_CITY`**, **`BRIGHTDATA_RADIUS_MILES`**, **`BRIGHTDATA_LIMIT_PER_INPUT`** (optional): Bright Data Facebook Marketplace params. Defaults: dataset `gd_lvt9iwuh6fbcwmx1a`, keyword `Apartment`, city `Provo, UT`, radius `20` miles, limit `100` per input. Used by `fetch.py` to restrict listings to ~20 miles around the city and cap how many records are collected per run.
+
+### Token usage (Bright Data cost control)
+
+- **Debug / low-cost run:** Set `BRIGHTDATA_LIMIT_PER_INPUT=100` and `BRIGHTDATA_RADIUS_MILES=20` (or lower) in `.env` to keep each run small. Use `python main.py --dry-run` to test the pipeline without calling the API.
+- **Full run:** Increase `BRIGHTDATA_LIMIT_PER_INPUT` (e.g. `1000`) and optionally `BRIGHTDATA_RADIUS_MILES` when you need more listings. Bright Data may enforce a minimum limit (e.g. 100).
 
 **Do not commit `.env` or any file containing API keys.** The `.env` file is gitignored.
 

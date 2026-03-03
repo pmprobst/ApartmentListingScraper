@@ -15,11 +15,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db import get_connection
 from fetch import (
     BRIGHTDATA_API_KEY,
+    BRIGHTDATA_CITY,
+    BRIGHTDATA_DATASET_ID,
+    BRIGHTDATA_KEYWORD,
+    BRIGHTDATA_LIMIT_PER_INPUT,
+    BRIGHTDATA_RADIUS_MILES,
     BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY,
     DEFAULT_CITY,
     DEFAULT_DATASET_ID,
     DEFAULT_DB,
     DEFAULT_KEYWORD,
+    DEFAULT_LIMIT_PER_INPUT,
     DEFAULT_RADIUS_MILES,
     LISTINGS_DB,
     run_fetch,
@@ -42,15 +48,20 @@ def run_fetch_step(dry_run: bool) -> str:
         if not api_key:
             print("ERROR: Missing BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY (or BRIGHTDATA_API_KEY)", file=sys.stderr)
             sys.exit(1)
-        dataset_id = _env("BRIGHTDATA_DATASET_ID", DEFAULT_DATASET_ID)
-        keyword = _env("BRIGHTDATA_KEYWORD", DEFAULT_KEYWORD)
-        city = _env("BRIGHTDATA_CITY", DEFAULT_CITY)
-        radius_str = _env("BRIGHTDATA_RADIUS_MILES", str(DEFAULT_RADIUS_MILES))
+        dataset_id = _env(BRIGHTDATA_DATASET_ID, DEFAULT_DATASET_ID)
+        keyword = _env(BRIGHTDATA_KEYWORD, DEFAULT_KEYWORD)
+        city = _env(BRIGHTDATA_CITY, DEFAULT_CITY)
+        radius_str = _env(BRIGHTDATA_RADIUS_MILES, str(DEFAULT_RADIUS_MILES))
         try:
             radius_miles = int(radius_str)
         except ValueError:
             radius_miles = DEFAULT_RADIUS_MILES
-        run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles)
+        limit_str = _env(BRIGHTDATA_LIMIT_PER_INPUT, str(DEFAULT_LIMIT_PER_INPUT))
+        try:
+            limit_per_input = int(limit_str)
+        except ValueError:
+            limit_per_input = DEFAULT_LIMIT_PER_INPUT
+        run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles, limit_per_input)
     return db_path
 
 

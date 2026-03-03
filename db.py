@@ -4,6 +4,7 @@ Phase 0: listings table, address normalization, upsert by (source, source_listin
 See plan/reference.md for schema and plan/phase-0.md for steps.
 """
 
+import json
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -108,7 +109,7 @@ def upsert_listing(
     price: float | None = None,
     beds: float | None = None,
     baths: float | None = None,
-    extracted: str | None = None,
+    extracted: str | dict | list | None = None,
 ) -> None:
     """
     Insert or update one listing by (source, source_listing_id).
@@ -120,6 +121,18 @@ def upsert_listing(
         normalized_address = normalize_address(address_raw)
     elif normalized_address is None:
         normalized_address = ""
+
+    # Ensure extracted is stored as a JSON string when structured data is provided
+    if extracted is None:
+        extracted_json = None
+    elif isinstance(extracted, str):
+        extracted_json = extracted
+    else:
+        try:
+            extracted_json = json.dumps(extracted, ensure_ascii=False, sort_keys=True)
+        except TypeError:
+            # Fallback: store string representation if value is not JSON-serializable
+            extracted_json = str(extracted)
 
     conn.execute("""
         INSERT INTO listings (
@@ -148,7 +161,7 @@ def upsert_listing(
         baths,
         now,
         now,
-        extracted,
+        extracted_json,
     ))
     # first_seen is only set on INSERT; DO UPDATE leaves it unchanged
     conn.commit()

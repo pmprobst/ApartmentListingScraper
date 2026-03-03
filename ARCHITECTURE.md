@@ -58,11 +58,11 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
 - **Bright Data API interaction**
   - `TRIGGER_URL = "https://api.brightdata.com/datasets/v3/trigger"`
   - `PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"`
-  - `SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/snapshots"`
+  - `SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"` (same as scrape_download.py)
   - `trigger_collection(api_key, dataset_id, keyword, city, radius_miles=20)`:
     - Calls `POST /datasets/v3/trigger?dataset_id=...&type=discover_new&discover_by=keyword` with JSON:
-      - `{"input": [{"keyword": <keyword>, "city": <city>, "radius": <radius_miles>, "date_listed": "", "state": "UT", "country": "US"}]}`.
-    - Use `city` like `"Provo, UT"` and `radius_miles` so results are restricted to ~20 miles around Provo, UT (and US-only).
+      - `{"input": [{"keyword": <keyword>, "city": <city>, "radius": <radius_miles>, "date_listed": ""}]}`.
+    - Use `city` like `"Provo, UT"` and `radius_miles` so results are restricted to ~20 miles around the city. (API does not accept separate state/country fields.)
     - On success, returns `snapshot_id` (string) or `None` on errors (with logging).
   - `wait_for_ready(api_key, snapshot_id)`:
     - Polls `GET /datasets/v3/progress/{snapshot_id}` every `POLL_INTERVAL_SEC` until:
@@ -71,7 +71,7 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
       - 404 → logs a warning and returns `True` (allowing download attempt).
       - Timeout after `POLL_TIMEOUT_SEC` → returns `False`.
   - `download_snapshot(api_key, snapshot_id)`:
-    - Calls `GET /datasets/snapshots/{snapshot_id}/download?format=json`.
+    - Calls `GET /datasets/v3/snapshot/{snapshot_id}?format=json` (same endpoint as scrape_download.py).
     - Handles response shapes:
       - Top‑level list → returned as‑is.
       - Object with array fields like `data`, `results`, `listings`, `items`, `records` → returns that array.
@@ -96,7 +96,7 @@ Right now the implementation is focused on **Phase 0** (Bright Data → SQLite) 
 
 - **Pipeline orchestration**
   - `run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles=20) -> int`:
-    - Triggers a collection (with radius and state/country for Provo, UT), waits for the snapshot to be ready, downloads it, normalizes each record, and upserts via `upsert_listing` into the SQLite DB at `db_path`.
+    - Triggers a collection (with city and radius for location), waits for the snapshot to be ready, downloads it, normalizes each record, and upserts via `upsert_listing` into the SQLite DB at `db_path`.
     - Returns the count of successfully upserted listings.
   - `run_fetch_dry_run(db_path) -> int`:
     - Uses static `MOCK_RECORDS` (with realistic long Marketplace item ids) and runs only the normalize+upsert steps (no API calls).
@@ -191,7 +191,7 @@ These two scripts are **standalone helpers** for working directly with Bright Da
      - Otherwise parses JSON and prints `Status for {snapshot_id}: <status>`.
   2. If `status != "ready"` → exits **without** requesting the snapshot content.
   3. If `status == "ready"`:
-     - Calls `GET https://api.brightdata.com/datasets/snapshots/{snapshot_id}/download?format=json`.
+     - Calls `GET https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}?format=json`.
      - If status 202 → prints a “not ready” message and exits.
      - On success, saves the payload to `marketplace_snapshot_{snapshot_id}.json` and prints the approximate record count (handles both list and common object‑with‑array shapes).
 
