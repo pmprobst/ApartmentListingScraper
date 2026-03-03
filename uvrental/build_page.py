@@ -48,38 +48,6 @@ def _thirty_days_ago_iso() -> str:
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _is_clearly_utah(address_raw: str | None) -> bool:
-    """
-    Heuristic filter for Utah-only listings.
-    """
-    if address_raw is None:
-        return False
-    s = address_raw.strip().lower()
-    if not s:
-        return False
-    if "utah" in s:
-        return True
-    if ", ut" in s or s.endswith(" ut") or ", ut " in s or " ut " in s:
-        return True
-    return False
-
-
-def _delete_non_utah_rows(conn) -> None:
-    """
-    Delete listings whose address is clearly outside Utah.
-    """
-    rows = conn.execute("SELECT id, address_raw FROM listings").fetchall()
-    to_delete = [
-        row["id"]
-        for row in rows
-        if not _is_clearly_utah(row["address_raw"])
-    ]
-    if not to_delete:
-        return
-    conn.executemany("DELETE FROM listings WHERE id = ?", [(i,) for i in to_delete])
-    conn.commit()
-
-
 def _format_run_ts(iso_ts: str | None) -> str:
     if not iso_ts:
         return "—"
@@ -103,8 +71,6 @@ def build_page() -> None:
 
     conn = get_connection(db_path)
     try:
-        _delete_non_utah_rows(conn)
-
         rows = conn.execute(
             """
             SELECT id, source, source_listing_id, link, title, price, beds, baths,

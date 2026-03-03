@@ -126,10 +126,11 @@ def test_build_page_excludes_listings_older_than_30_days(tmp_path, env_vars):
                 del os.environ[key]
 
 
-def test_build_page_deletes_and_hides_non_utah_listings(tmp_path, env_vars):
+def test_build_page_does_not_filter_by_location(tmp_path, env_vars):
     """
-    Listings clearly outside Utah (e.g. 'Boise, ID') are deleted from the DB
-    and do not appear on the rendered page, while Utah listings remain.
+    build_page no longer deletes or filters listings based on location;
+    both Utah and non-Utah listings should remain in the DB and appear
+    on the rendered page (subject only to date/price filters).
     """
     db_path = tmp_path / "listings.db"
     output_dir = tmp_path / "out_non_utah"
@@ -159,26 +160,18 @@ def test_build_page_deletes_and_hides_non_utah_listings(tmp_path, env_vars):
         build_page_module.build_page()
 
         content = (output_dir / "index.html").read_text(encoding="utf-8")
-        assert "Non-Utah listing" not in content
+        assert "Non-Utah listing" in content
         assert "Utah listing" in content
 
         conn = get_connection(str(db_path))
         try:
-            # Non-Utah row should have been deleted; Utah row should remain.
-            non_utah_rows = conn.execute(
-                "SELECT id FROM listings WHERE title = ?", ("Non-Utah listing",)
+            # Both rows should remain in the DB regardless of location.
+            rows = conn.execute(
+                "SELECT title FROM listings ORDER BY id"
             ).fetchall()
-            utah_rows = conn.execute(
-                "SELECT id FROM listings WHERE title = ?", ("Utah listing",)
-            ).fetchall()
-            assert non_utah_rows == []
-            assert len(utah_rows) == 1
-
-            run = get_run_status(conn)
-            assert run is not None
-            assert (
-                run["displayed"] >= 1
-            ), "at least the Utah listing should be counted as displayed"
+            titles = {r["title"] for r in rows}
+            assert "Non-Utah listing" in titles
+            assert "Utah listing" in titles
         finally:
             conn.close()
     finally:
