@@ -1,4 +1,4 @@
-from fetch import (
+from ingest_records import (
     MARKETPLACE_ITEM_BASE,
     _address_raw,
     _norm_num,

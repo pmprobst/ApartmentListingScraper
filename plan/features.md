@@ -79,7 +79,7 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
   - **Hosting:** GitHub Pages. Content is updated after each successful (or partial) pipeline run.
   - **Run status on page:** The page must display a **run status** indicator with: **(1)** last run timestamp (human-readable), **(2)** success or failure, **(3)** total listing count, and **(4)** counts for **N new** and **M updated** (required; e.g. “N new, M updated” or equivalent). Optionally, run status may include **K removed** (count of listings marked removed or phased out).
 - **Interaction**
-  - The app is run via **scripts** (e.g. `fetch.py`, `build_page.py`). Invocation: e.g. `python fetch.py`, `python build_page.py` (or equivalent). Scripts must be runnable **locally** (with env and config) and **in GitHub Actions**. No formal CLI framework and no long-running local HTTP server are required.
+- The app is run via **scripts** (e.g. `scrape.py`, `scrape_download.py`, `ingest_records.py`, `build_page.py`). Invocation: e.g. `python scrape.py`, `python scrape_download.py`, `python ingest_records.py`, `python build_page.py` (or equivalent). Scripts must be runnable **locally** (with env and config) and **in GitHub Actions**. No formal CLI framework and no long-running local HTTP server are required.
 
 ---
 

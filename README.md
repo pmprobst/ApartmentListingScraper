@@ -17,22 +17,24 @@ Skims online rental markets in Utah Valley (Bright Data → SQLite → webpage).
 
 ## Environment variables
 
-- **`BRIGHT_DATA_API_KEY`** or **`BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY`** or **`BRIGHTDATA_API_KEY`** (required for real fetch): Your Bright Data API key. Do not commit; use `.env` locally or GitHub Secrets in CI.
-- **`LISTINGS_DB`** (optional): Path to the SQLite database file. Default: `listings.db`.
-- **`BRIGHTDATA_DATASET_ID`**, **`BRIGHTDATA_KEYWORD`**, **`BRIGHTDATA_CITY`**, **`BRIGHTDATA_RADIUS_MILES`**, **`BRIGHTDATA_LIMIT_PER_INPUT`** (optional): Bright Data Facebook Marketplace params. Defaults: dataset `gd_lvt9iwuh6fbcwmx1a`, keyword `Apartment`, city `Provo, UT`, radius `20` miles, limit `100` per input. Used by `fetch.py` to restrict listings to ~20 miles around the city and cap how many records are collected per run.
-
-### Token usage (Bright Data cost control)
-
-- **Debug / low-cost run:** Set `BRIGHTDATA_LIMIT_PER_INPUT=100` and `BRIGHTDATA_RADIUS_MILES=20` (or lower) in `.env` to keep each run small. Use `python main.py --dry-run` to test the pipeline without calling the API.
-- **Full run:** Increase `BRIGHTDATA_LIMIT_PER_INPUT` (e.g. `1000`) and optionally `BRIGHTDATA_RADIUS_MILES` when you need more listings. Bright Data may enforce a minimum limit (e.g. 100).
+- **`BRIGHTDATA_API_KEY`** – required by `scrape.py` / `scrape_download.py` to trigger and download Bright Data snapshots. Do not commit; use `.env` locally or GitHub Secrets in CI.
+- **`LISTINGS_DB`** (optional) – path to the SQLite database file. Default: `listings.db`.
 
 **Do not commit `.env` or any file containing API keys.** The `.env` file is gitignored.
 
 ## Phase 0 (Bright Data → SQLite)
 
-- **Fetch:** `python fetch.py` (requires `BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY` or `BRIGHTDATA_API_KEY` in `.env`). Optional: `python fetch.py --dry-run` to insert mock listings without calling the API.
-- **Run tests / see listing data:** `python main.py` runs fetch then prints all listings from the DB. Use `python main.py --dry-run` to skip the API and print mock data.
-- **Verify:** After a fetch, run `python scripts/verify_phase0_step4.py [path_to_listings.db]` to confirm the DB has listings with no duplicates and `first_seen`/`last_seen` set. Default DB path: `listings.db` or `LISTINGS_DB` env.
+End-to-end flow for Phase 0 is:
+
+1. **Trigger snapshot:** `python scrape.py`  
+   - Calls Bright Data’s Dataset API and records a `snapshot_id` with status `"initiated"` in `snapshot_history.jsonl`.
+2. **Download snapshot JSON:** `python scrape_download.py`  
+   - Polls snapshot status; when `ready`, saves `marketplace_snapshot_<snapshot_id>.json` and records status `"downloaded"` in `snapshot_history.jsonl`.
+3. **Ingest into SQLite and build page:** `python main.py`  
+   - Uses `ingest_records.py` to ingest all snapshots whose latest status is `"downloaded"` into `LISTINGS_DB`, marking them `"ingested"` in `snapshot_history.jsonl`.
+   - Prints a summary of listings from the DB and regenerates `docs/index.html` via `build_page.py`.
+
+At the end of Phase 0, `listings.db` contains normalized, deduplicated listings from Facebook Marketplace.
 
 ## Plan
 

@@ -61,9 +61,10 @@ This project uses Bright Data’s **API key** (Bearer token) to call the **Datas
    BRIGHTDATA_CITY=Provo
    ```
 4. Save the file. Ensure `.env` is in `.gitignore` and **never commit it**.
-5. Run the fetcher:
+5. Run the scraper + downloader:
    ```bash
-   python fetch.py
+   python scrape.py
+   python scrape_download.py
    ```
 
 ---

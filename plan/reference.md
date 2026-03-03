@@ -101,7 +101,7 @@ Example: `config_schema.toml` in repo root. No config loading implementation unt
 | Scheduler | GitHub Actions workflow; credentials via GitHub Secrets. |
 | Webpage | Static HTML on GitHub Pages; run status indicator. |
 | Claude API | Prototype separately first; then run only on new listings. API key in GitHub Secrets / env. |
-| Scripts | `fetch.py`, `build_page.py`; run via GitHub Actions or locally. |
+| Scripts | `scrape.py`, `scrape_download.py`, `ingest_records.py`, `build_page.py`; run via GitHub Actions or locally. |
 | Alerts | Optional; not required for MVP. |
 
 ---

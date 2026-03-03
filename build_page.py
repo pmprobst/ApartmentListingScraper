@@ -152,7 +152,10 @@ def build_page() -> None:
         html_parts.append("  <section class=\"run-status\" aria-label=\"Run status\">")
         html_parts.append("    <h2>Run status</h2>")
         if run is None:
-            html_parts.append("    <p>No run recorded yet. Run <code>fetch.py</code> first.</p>")
+            html_parts.append(
+                "    <p>No run recorded yet. Run <code>scrape.py</code>, "
+                "<code>scrape_download.py</code>, and <code>main.py</code> first.</p>"
+            )
         else:
             success_str = "success" if run["success"] else "failure"
             html_parts.append(f"    <p><strong>Last run:</strong> {_format_run_ts(run['last_run_ts'])} ({success_str})</p>")

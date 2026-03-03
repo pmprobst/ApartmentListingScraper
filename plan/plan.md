@@ -22,7 +22,7 @@ Application that regularly skims online rental markets in Utah Valley to identif
 | Storage | **SQLite** (python `sqlite3`) | Listings and metadata; stored in a **separate private repo** (not in the public repo). |
 | Scheduling | **GitHub Actions** | Schedule (e.g. every 12 hours); fetch → Claude extraction → build_page; push to Pages. Secrets in GitHub Secrets. |
 | LLM extraction | **Claude API** | Run only on new listings within price/parameter filter. Prototype separately first. |
-| Interaction | **Scripts** | `fetch.py`, `build_page.py`; run locally or via GitHub Actions. |
+| Interaction | **Scripts** | `scrape.py`, `scrape_download.py`, `ingest_records.py`, `build_page.py`; run locally or via GitHub Actions. |
 | Output | **GitHub-hosted webpage** | Static HTML; run status indicator on page. |
 
 - **Bright Data:** Facebook Marketplace Scraper API; normalize response and save to SQLite. Rollout: Facebook Marketplace → Zillow → KSL → Apartments.com.
@@ -34,7 +34,7 @@ Application that regularly skims online rental markets in Utah Valley to identif
 
 | Phase | Focus | Details |
 |-------|--------|--------|
-| **Phase 0** | Bright Data → SQLite | Facebook Marketplace via Bright Data API; SQLite schema and dedup; fetch.py only. |
+| **Phase 0** | Bright Data → SQLite | Facebook Marketplace via Bright Data API; SQLite schema and dedup; `scrape.py`/`scrape_download.py` + `ingest_records.py`. |
 | **Phase 1** | Run status and static webpage | run_status store; price filter and 30-day removal; build_page.py generates static HTML (first static page + run status). |
 | **Phase 2** | Config schema and Claude API prototype | Define config (TOML) and validate LLM extraction in isolation before wiring pipeline. |
 | **Phase 3** | Claude + multi-site + GitHub Actions | Claude extraction for new listings only; TOML config required; add other sites; schedule via Actions; persist DB in separate private repo. |

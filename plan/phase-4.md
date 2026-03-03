@@ -26,7 +26,7 @@ Polish the generated webpage: show extracted fields, sorting/filtering, and run 
 
 ### 5. Scripts and local run
 
-- Document that `python fetch.py` and `python build_page.py` can be run **locally** (with env vars for API keys and config pointing to local paths). Same scripts are used in GitHub Actions. Optional: single entry script that runs fetch → extract → build_page for local testing.
+- Document that `python scrape.py`, `python scrape_download.py`, `python ingest_records.py`, and `python build_page.py` can be run **locally** (with env vars for API keys and config pointing to local paths). Same scripts are used in GitHub Actions. Optional: single entry script that runs scrape → download → ingest → extract → build_page for local testing.
 
 ### 6. Optional: new-listing alerts
 
@@ -41,6 +41,6 @@ Polish the generated webpage: show extracted fields, sorting/filtering, and run 
 - [ ] **Run status** is visible on the page (last run time, success/failure, total count, N new, M updated).
 - [ ] **Sorting or filtering** is available (at least one of: sort by price, date, or filter by source/price). Prefer sort by date or price.
 - [ ] **GitHub Pages** is configured and the site updates automatically after each workflow run; no manual push needed.
-- [ ] **Scripts** are documented for local use (fetch.py, build_page.py, env vars, config).
+- [ ] **Scripts** are documented for local use (`scrape.py`, `scrape_download.py`, `ingest_records.py`, `build_page.py`, env vars, config).
 
 When all checkboxes are satisfied, proceed to [phase-5.md](phase-5.md).

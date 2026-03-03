@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from db import get_connection, get_run_status
-from fetch import run_fetch_dry_run, MOCK_RECORDS
+from ingest_records import run_fetch_dry_run, MOCK_RECORDS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in __import__("sys").path:

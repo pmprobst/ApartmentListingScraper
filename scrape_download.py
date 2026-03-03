@@ -20,27 +20,50 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
-api_key = os.environ.get("BRIGHT_DATA_API_KEY", "").strip()
+api_key = os.environ.get("BRIGHTDATA_API_KEY", "").strip()
 if not api_key:
-    raise SystemExit("Missing BRIGHT_DATA_API_KEY in .env")
+    raise SystemExit("Missing BRIGHTDATA_API_KEY in .env")
 
 SNAPSHOT_HISTORY_PATH = Path(__file__).with_name("snapshot_history.jsonl")
+
+
+def _append_history(snapshot_id: str, status: str) -> None:
+    """Append a status update for a snapshot to snapshot_history.jsonl."""
+    from datetime import datetime, timezone
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    record = {
+        "timestamp": ts,
+        "snapshot_id": snapshot_id,
+        "status": status,
+        "updated_ts": ts,
+    }
+    with SNAPSHOT_HISTORY_PATH.open("a", encoding="utf-8") as f:
+        json.dump(record, f)
+        f.write("\n")
 
 
 def _latest_snapshot_id() -> str:
     if not SNAPSHOT_HISTORY_PATH.exists():
         raise SystemExit(f"No snapshot history file found at {SNAPSHOT_HISTORY_PATH}")
-    # Read lines from the end until we find a valid JSON record with snapshot_id
+    # Read lines and scan from the end, considering only the latest state per snapshot_id.
     with SNAPSHOT_HISTORY_PATH.open("r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip()]
+    seen_ids: set[str] = set()
     for line in reversed(lines):
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
             continue
         sid = rec.get("snapshot_id")
-        if sid:
-            return sid
+        if not sid or sid in seen_ids:
+            continue
+        seen_ids.add(sid)
+        status = (rec.get("status") or "").lower()
+        # Skip snapshots whose latest state is 'downloaded'
+        if status == "downloaded":
+            continue
+        return sid
     raise SystemExit(f"No valid snapshot_id entries found in {SNAPSHOT_HISTORY_PATH}")
 
 
@@ -81,7 +104,8 @@ status = (prog.get("status") or "").lower()
 print(f"Status for {snapshot_id}: {status}")
 
 if status != "ready":
-    # Not ready yet (running/starting/etc.) – exit without downloading.
+    # Not ready yet (running/starting/etc.) – record 'running' state and exit.
+    _append_history(snapshot_id, "running")
     raise SystemExit(0)
 
 # 2. Download snapshot now that it's ready
@@ -115,3 +139,4 @@ elif isinstance(payload, dict):
             break
 
 print(f"Saved to {out_path} ({count} records)")
+_append_history(snapshot_id, "downloaded")

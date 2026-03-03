@@ -1,7 +1,6 @@
 """
-Main entry point for running tests during the build.
-Runs fetch (optionally --dry-run), then prints listing data from the DB.
-Usage: python main.py [--dry-run]
+Main entry point for ingesting the latest snapshot into the DB and building HTML.
+Usage: python main.py
 """
 import os
 import sys
@@ -13,55 +12,11 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from db import get_connection
-from fetch import (
-    BRIGHTDATA_API_KEY,
-    BRIGHTDATA_CITY,
-    BRIGHTDATA_DATASET_ID,
-    BRIGHTDATA_KEYWORD,
-    BRIGHTDATA_LIMIT_PER_INPUT,
-    BRIGHTDATA_RADIUS_MILES,
-    BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY,
-    DEFAULT_CITY,
-    DEFAULT_DATASET_ID,
-    DEFAULT_DB,
-    DEFAULT_KEYWORD,
-    DEFAULT_LIMIT_PER_INPUT,
-    DEFAULT_RADIUS_MILES,
-    LISTINGS_DB,
-    _env,
-    run_fetch,
-    run_fetch_dry_run,
-)
+from build_page import build_page as build_static_page
+from ingest_records import LISTINGS_DB, DEFAULT_DB, _env, ingest_all_downloaded_from_history
 
 
-def run_fetch_step(dry_run: bool) -> str:
-    """Run fetch (real or dry-run). Returns DB path used."""
-    db_path = _env(LISTINGS_DB, DEFAULT_DB)
-    if dry_run:
-        run_fetch_dry_run(db_path)
-    else:
-        api_key = _env(BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY) or _env(BRIGHTDATA_API_KEY)
-        if not api_key:
-            print("ERROR: Missing BRIGHT_DATA_FACEBOOK_MARKETPLACE_API_KEY (or BRIGHTDATA_API_KEY)", file=sys.stderr)
-            sys.exit(1)
-        dataset_id = _env(BRIGHTDATA_DATASET_ID, DEFAULT_DATASET_ID)
-        keyword = _env(BRIGHTDATA_KEYWORD, DEFAULT_KEYWORD)
-        city = _env(BRIGHTDATA_CITY, DEFAULT_CITY)
-        radius_str = _env(BRIGHTDATA_RADIUS_MILES, str(DEFAULT_RADIUS_MILES))
-        try:
-            radius_miles = int(radius_str)
-        except ValueError:
-            radius_miles = DEFAULT_RADIUS_MILES
-        limit_str = _env(BRIGHTDATA_LIMIT_PER_INPUT, str(DEFAULT_LIMIT_PER_INPUT))
-        try:
-            limit_per_input = int(limit_str)
-        except ValueError:
-            limit_per_input = DEFAULT_LIMIT_PER_INPUT
-        run_fetch(db_path, api_key, dataset_id, keyword, city, radius_miles, limit_per_input)
-    return db_path
-
-
-def print_listings(db_path: str, dry_run: bool = False) -> None:
+def print_listings(db_path: str) -> None:
     """Print all listings from the DB in a readable format."""
     conn = get_connection(db_path)
     try:
@@ -72,10 +27,10 @@ def print_listings(db_path: str, dry_run: bool = False) -> None:
             print("No listings in DB.")
             return
         print(f"Listing data ({len(rows)} row(s)):")
-        if dry_run:
-            print("(Dry-run: these are mock listings with fake IDs; links will not open real Marketplace pages.)")
-        else:
-            print("(Note: Marketplace links may show \"Not available\" if the listing was removed or sold since fetch.)")
+        print(
+            '(Note: Marketplace links may show "Not available" if the listing was '
+            "removed or sold since fetch.)"
+        )
         print()
         for r in rows:
             print("-" * 60)
@@ -96,14 +51,16 @@ def print_listings(db_path: str, dry_run: bool = False) -> None:
 
 
 def main() -> None:
-    dry_run = "--dry-run" in sys.argv
-    if dry_run:
-        print("Running fetch (dry-run)...\n")
-    else:
-        print("Running fetch (Bright Data API)...\n")
-    db_path = run_fetch_step(dry_run)
-    print("\nFetched listing data from DB:\n")
-    print_listings(db_path, dry_run=dry_run)
+    print("Ingesting all downloaded snapshots into DB...\n")
+    db_path = _env(LISTINGS_DB, DEFAULT_DB)
+    n = ingest_all_downloaded_from_history(db_path)
+    print(f"\nIngested {n} records into {db_path}.\n")
+    print("\nListing data from DB:\n")
+    print_listings(db_path)
+
+    print("\nBuilding static HTML page...\n")
+    build_static_page()
+    print("Static page build complete (see docs/index.html by default).")
 
 
 if __name__ == "__main__":

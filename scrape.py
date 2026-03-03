@@ -7,7 +7,7 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
-api_key = os.environ.get("BRIGHT_DATA_API_KEY", "").strip()
+api_key = os.environ.get("BRIGHTDATA_API_KEY", "").strip()
 if not api_key:
     raise SystemExit("Missing BRIGHT_DATA_API_KEY in .env")
 
@@ -58,9 +58,12 @@ print(data)
 
 snapshot_id = data.get("snapshot_id") or data.get("snapshot_ID")
 if snapshot_id:
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     record = {
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": ts,
         "snapshot_id": snapshot_id,
+        "status": "initiated",
+        "updated_ts": ts,
     }
     with SNAPSHOT_HISTORY_PATH.open("a", encoding="utf-8") as f:
         json.dump(record, f)

@@ -8,7 +8,7 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 
 ### 1. Config loading (required)
 
-- Refactor `fetch.py` and `build_page.py` to use the full **config from Phase 2** (TOML). **This is required.** Pipeline scripts must read paths, search (price_max, price_min, location, etc.), bright_data, run_status, and claude settings from the TOML config. API keys (Bright Data, Claude) remain in **env / GitHub Secrets** only; do not put secrets in config.
+- Refactor `ingest_records.py` and `build_page.py` to use the full **config from Phase 2** (TOML). **This is required.** Pipeline scripts must read paths, search (price_max, price_min, location, etc.), bright_data, run_status, and claude settings from the TOML config. API keys (Bright Data, Claude) remain in **env / GitHub Secrets** only; do not put secrets in config.
 
 ### 2. Price filter (already in Phase 1)
 
@@ -25,7 +25,7 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 
 ### 4. Wire into pipeline
 
-- After `fetch.py` runs (and upserts new/updated listings), run the **Claude extraction** step for new listings only, then run `build_page.py`. Pipeline order: fetch → extract (new only) → build_page.
+- After `ingest_records.py` runs (and upserts new/updated listings), run the **Claude extraction** step for new listings only, then run `build_page.py`. Pipeline order: ingest → extract (new only) → build_page.
 
 ### 5. GitHub Actions workflow (separate private repo for DB)
 
@@ -34,7 +34,7 @@ Add Claude extraction (only for new listings within price filter), then add GitH
   - **Checks out** the **public repo** (this repo: code only). Uses a **secret** (e.g. PAT or deploy key) with access to a **separate private repo** that holds **only the SQLite DB** (and any run_status files).
   - **Fetches the DB from the private repo** (e.g. clone the private repo into a subdir or download the DB file via API) so the workflow has the current SQLite file in the workspace.
   - Sets up **Python**, installs dependencies (e.g. from requirements.txt).
-  - Runs **fetch.py** (config points to the DB path in the workspace).
+  - Runs **`scrape.py` / `scrape_download.py` / `ingest_records.py`** (config points to the DB path in the workspace).
   - Runs the **Claude extraction** step for new listings.
   - Runs **build_page.py**.
   - **Commits and pushes** the updated SQLite file (and any run_status) **back to the private repo** (not to the public repo).
@@ -53,7 +53,7 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 
 ## Requirements to pass before moving to Phase 4
 
-- [ ] **Pipeline scripts read from TOML config:** fetch.py and build_page.py read paths, search, bright_data, run_status, and claude from config; API keys from env only.
+- [ ] **Pipeline scripts read from TOML config:** `ingest_records.py` and `build_page.py` read paths, search, bright_data, run_status, and claude from config; API keys from env only.
 - [ ] **Price filter** (from Phase 1) is respected by Claude step: only listings within price_max/price_min (and new) are sent to Claude.
 - [ ] **Claude extraction** runs only for **new** listings (first_seen = current run) within price; extracted data is stored in SQLite (extracted column or equivalent).
 - [ ] **Pipeline order** is correct: fetch → Claude for new listings → build_page.

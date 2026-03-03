@@ -8,7 +8,7 @@ Harden the pipeline: error handling, logging, and optional reporting. No new fea
 
 ### 1. Error handling and logging
 
-- In **fetch.py**: catch API errors (timeouts, non-2xx responses, invalid JSON). Log failures with site/source name and error message; do not crash the entire run if one source fails. Optional: **retry with backoff** (e.g. 1 retry after 5 seconds) for transient errors.
+- In the Bright Data interaction layer (`scrape.py` / `scrape_download.py`): catch API errors (timeouts, non-2xx responses, invalid JSON). Log failures with site/source name and error message; do not crash the entire run if one source fails. Optional: **retry with backoff** (e.g. 1 retry after 5 seconds) for transient errors.
 - In **Claude extraction** step: catch API errors and timeouts; log which listing failed; skip that listing or mark "extraction failed" so the pipeline can continue. Do not lose existing SQLite data.
 - Ensure **run_status** can record "partial" or "failed" (e.g. fetch failed, or extract failed) so the webpage still shows last run and outcome.
 

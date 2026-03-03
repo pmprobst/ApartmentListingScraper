@@ -1,6 +1,6 @@
 # Phase 1: Run status and static webpage
 
-Add run status tracking, **price filter**, **30-day phased removal**, and webpage generation. Build on Phase 0: fetch.py will now update run_status and apply removal logic; build_page.py reads listings (within price range and within 30-day window) and run_status and generates the static HTML.
+Add run status tracking, **price filter**, **30-day phased removal**, and webpage generation. Build on Phase 0: `ingest_records.py` will now update `run_status` and apply removal logic at read time; `build_page.py` reads listings (within price range and within 30-day window) and `run_status` and generates the static HTML.
 
 ---
 
@@ -8,8 +8,7 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 
 ### 1. Run status
 
-- Add a **run_status** table or small status store (e.g. in the same SQLite DB: table with last run timestamp, success/failure, total listing count, **N new**, **M updated**, and optionally **K removed**). After each run of `fetch.py`, record these values. They will be read by `build_page.py` for the webpage indicator (see [features.md](features.md) §8).
-- Update **fetch.py** from Phase 0 so it writes to **run_status** after each run (timestamp, success, count).
+- Add a **run_status** table or small status store (e.g. in the same SQLite DB: table with last run timestamp, success/failure, total listing count, **N new**, **M updated**, and optionally **K removed**). After each ingestion run in `ingest_records.py`, record these values. They will be read by `build_page.py` for the webpage indicator (see [features.md](features.md) §8).
 
 ### 2. Price filter (Phase 1)
 
