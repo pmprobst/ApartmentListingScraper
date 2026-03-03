@@ -2,7 +2,16 @@ from datetime import datetime, timezone
 
 import sqlite3
 
-from db import get_connection, init_schema, normalize_address, upsert_listing
+from db import (
+    get_connection,
+    init_schema,
+    normalize_address,
+    upsert_listing,
+    update_run_status_after_build_page,
+    update_run_status_after_fetch,
+    update_run_status_after_llm,
+    get_run_status,
+)
 
 
 def test_init_schema_creates_listings_table(tmp_path):
@@ -144,6 +153,53 @@ def test_upsert_listing_coalesces_extracted(tmp_path):
         )
         row2 = _fetch_single_listing(conn)
         assert row2["extracted"] == '{"foo": "bar"}'
+    finally:
+        conn.close()
+
+
+def test_run_status_helpers_insert_and_update(tmp_path):
+    db_path = tmp_path / "run_status.db"
+    conn = get_connection(str(db_path))
+    try:
+        # After fetch
+        update_run_status_after_fetch(
+            conn,
+            success=True,
+            scraped=10,
+            thrown=2,
+            duplicate=3,
+            added=5,
+            total_count=8,
+        )
+        row1 = get_run_status(conn)
+        assert row1 is not None
+        assert row1["success"] == 1
+        assert row1["scraped"] == 10
+        assert row1["thrown"] == 2
+        assert row1["duplicate"] == 3
+        assert row1["added"] == 5
+        assert row1["total_count"] == 8
+        assert row1["new_count"] == 5
+        assert row1["updated_count"] == 3
+        assert row1["llm_processed"] == 0
+        assert row1["displayed"] == 0
+        assert isinstance(row1["last_run_ts"], str) and row1["last_run_ts"].endswith("Z")
+
+        # After LLM processing
+        update_run_status_after_llm(conn, llm_processed=7)
+        row2 = get_run_status(conn)
+        assert row2["llm_processed"] == 7
+        # Fetch-derived counts unchanged
+        assert row2["scraped"] == 10
+        assert row2["added"] == 5
+
+        # After build_page
+        update_run_status_after_build_page(conn, displayed=4)
+        row3 = get_run_status(conn)
+        assert row3["displayed"] == 4
+        # Still single row
+        cur = conn.execute("SELECT COUNT(*) FROM run_status")
+        assert cur.fetchone()[0] == 1
     finally:
         conn.close()
 

@@ -70,7 +70,7 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Create listings table if it does not exist. Idempotent."""
+    """Create core tables if they do not exist. Idempotent."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS listings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,6 +88,22 @@ def init_schema(conn: sqlite3.Connection) -> None:
             extracted TEXT,
             canonical_listing_id INTEGER,
             UNIQUE(source, source_listing_id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS run_status (
+            id INTEGER PRIMARY KEY,
+            last_run_ts TEXT NOT NULL,
+            success INTEGER NOT NULL,
+            scraped INTEGER NOT NULL,
+            thrown INTEGER NOT NULL,
+            duplicate INTEGER NOT NULL,
+            added INTEGER NOT NULL,
+            total_count INTEGER NOT NULL,
+            new_count INTEGER NOT NULL,
+            updated_count INTEGER NOT NULL,
+            llm_processed INTEGER NOT NULL,
+            displayed INTEGER NOT NULL
         )
     """)
     conn.commit()
@@ -189,3 +205,168 @@ def upsert_listing(
                     (other[0], our_id),
                 )
     conn.commit()
+
+
+def update_run_status_after_fetch(
+    conn: sqlite3.Connection,
+    *,
+    success: bool,
+    scraped: int,
+    thrown: int,
+    duplicate: int,
+    added: int,
+    total_count: int,
+) -> None:
+    """
+    Update run_status after fetch has completed.
+
+    - scraped: total records returned by the API.
+    - thrown: records skipped (errors, empty, invalid).
+    - duplicate: records that already existed in DB (updated).
+    - added: records newly inserted into DB this run.
+    - total_count: total rows in listings after the run.
+    """
+    now = _now_iso()
+    row = conn.execute("SELECT id, llm_processed, displayed FROM run_status WHERE id = 1").fetchone()
+    llm_processed = int(row["llm_processed"]) if row is not None else 0
+    displayed = int(row["displayed"]) if row is not None else 0
+
+    new_count = int(added)
+    updated_count = int(duplicate)
+    if row is None:
+        conn.execute(
+            """
+            INSERT INTO run_status (
+                id, last_run_ts, success,
+                scraped, thrown, duplicate, added,
+                total_count, new_count, updated_count,
+                llm_processed, displayed
+            ) VALUES (
+                1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                now,
+                1 if success else 0,
+                int(scraped),
+                int(thrown),
+                int(duplicate),
+                int(added),
+                int(total_count),
+                new_count,
+                updated_count,
+                llm_processed,
+                displayed,
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE run_status
+            SET
+                last_run_ts = ?,
+                success = ?,
+                scraped = ?,
+                thrown = ?,
+                duplicate = ?,
+                added = ?,
+                total_count = ?,
+                new_count = ?,
+                updated_count = ?
+            WHERE id = 1
+            """,
+            (
+                now,
+                1 if success else 0,
+                int(scraped),
+                int(thrown),
+                int(duplicate),
+                int(added),
+                int(total_count),
+                new_count,
+                updated_count,
+            ),
+        )
+    conn.commit()
+
+
+def update_run_status_after_llm(
+    conn: sqlite3.Connection,
+    *,
+    llm_processed: int,
+) -> None:
+    """
+    Update run_status after the Claude/LLM extraction step.
+    """
+    now = _now_iso()
+    row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
+    if row is None:
+        # Initialize with zeros for all fetch/display fields.
+        conn.execute(
+            """
+            INSERT INTO run_status (
+                id, last_run_ts, success,
+                scraped, thrown, duplicate, added,
+                total_count, new_count, updated_count,
+                llm_processed, displayed
+            ) VALUES (
+                1, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, 0
+            )
+            """,
+            (now, int(llm_processed)),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE run_status
+            SET last_run_ts = ?, llm_processed = ?
+            WHERE id = 1
+            """,
+            (now, int(llm_processed)),
+        )
+    conn.commit()
+
+
+def update_run_status_after_build_page(
+    conn: sqlite3.Connection,
+    *,
+    displayed: int,
+) -> None:
+    """
+    Update run_status after build_page has rendered the HTML.
+    """
+    now = _now_iso()
+    row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
+    if row is None:
+        # Initialize with zeros for all fetch/LLM fields.
+        conn.execute(
+            """
+            INSERT INTO run_status (
+                id, last_run_ts, success,
+                scraped, thrown, duplicate, added,
+                total_count, new_count, updated_count,
+                llm_processed, displayed
+            ) VALUES (
+                1, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, ?
+            )
+            """,
+            (now, int(displayed)),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE run_status
+            SET last_run_ts = ?, displayed = ?
+            WHERE id = 1
+            """,
+            (now, int(displayed)),
+        )
+    conn.commit()
+
+
+def get_run_status(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """
+    Return the single run_status row (or None if no runs recorded yet).
+    """
+    return conn.execute("SELECT * FROM run_status WHERE id = 1").fetchone()
+

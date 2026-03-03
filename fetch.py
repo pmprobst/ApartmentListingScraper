@@ -13,7 +13,11 @@ import time
 from dotenv import load_dotenv
 import requests
 
-from db import get_connection, upsert_listing
+from db import (
+    get_connection,
+    upsert_listing,
+    update_run_status_after_fetch,
+)
 
 load_dotenv()
 
@@ -316,20 +320,36 @@ def run_fetch(
     log.info("Downloaded %d records", len(records))
     conn = get_connection(db_path)
     try:
-        n = 0
+        scraped = len(records)
+        thrown = 0
+        duplicate = 0
+        added = 0
+        processed = 0
         for rec in records:
             if not isinstance(rec, dict):
+                thrown += 1
                 continue
             # Skip Bright Data error entries (e.g. "Redirect to login page", bad_input)
             if rec.get("error") is not None or rec.get("error_code") is not None:
+                thrown += 1
                 continue
             norm = normalize_record(rec)
             if not norm["link"] or norm["link"] == "https://www.facebook.com/marketplace":
+                thrown += 1
                 continue
+            source_listing_id = norm["source_listing_id"]
+            exists = conn.execute(
+                "SELECT 1 FROM listings WHERE source = ? AND source_listing_id = ?",
+                ("facebook_marketplace", source_listing_id),
+            ).fetchone()
+            if exists:
+                duplicate += 1
+            else:
+                added += 1
             upsert_listing(
                 conn,
                 source="facebook_marketplace",
-                source_listing_id=norm["source_listing_id"],
+                source_listing_id=source_listing_id,
                 link=norm["link"],
                 title=norm.get("title"),
                 price=norm.get("price"),
@@ -337,8 +357,19 @@ def run_fetch(
                 baths=norm.get("baths"),
                 address_raw=norm.get("address_raw"),
             )
-            n += 1
-        return n
+            processed += 1
+        # Total listings after this run
+        total_count = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
+        update_run_status_after_fetch(
+            conn,
+            success=True,
+            scraped=scraped,
+            thrown=thrown,
+            duplicate=duplicate,
+            added=added,
+            total_count=total_count,
+        )
+        return processed
     finally:
         conn.close()
 
