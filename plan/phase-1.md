@@ -18,10 +18,9 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 
 ### 3. 30-day phased removal
 
-- Listings are **phased out 30 days after last being seen** (see [features.md](features.md) and [reference.md](reference.md)#new-vs-updated-vs-removed). Implement per the implementation plan in reference.md:
-  - Add optional **removed_at** or **status** column to the listings table, or treat “removed” as a filter at read time (listings with `last_seen` &lt; now − 30 days).
-  - After each fetch run (or in build_page), consider listings with `last_seen` older than 30 days as removed: either mark them (UPDATE) or exclude them in queries.
-  - **build_page.py** only includes listings that are **within the 30-day window** (and within price range). Run status may optionally include **K removed** (count phased out).
+- Listings are **phased out 30 days after last being seen** (see [features.md](features.md) and [reference.md](reference.md)#new-vs-updated-vs-removed). Implemented as a **view-based** approach (no schema change):
+  - "Removed" is a **filter at read time**: `build_page.py` excludes listings with `last_seen` &lt; now − 30 days (UTC). No `removed_at` or `status` column is added.
+  - **build_page.py** only includes listings that are **within the 30-day window** (and within price range). **K removed** in run_status is optional per plan and is **not** implemented in the current code.
 
 ### 4. Webpage generation (`build_page.py`)
 
@@ -34,7 +33,7 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 
 ### 5. Local test
 
-- Run `fetch.py`, then `build_page.py`. Verify: run_status is updated after fetch; generated page shows only in-range and within-30-day listings and run status.
+- Run `fetch.py`, then `build_page.py`. Verify: run_status is updated after fetch; generated page shows only in-range and within-30-day listings and run status. Optionally verify that DB rows with `last_seen` older than 30 days do **not** appear on the generated page (integration tests cover this).
 
 ---
 
@@ -42,7 +41,7 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 
 - [ ] **run_status** is stored (SQLite table or file) and updated by fetch.py after each run (timestamp, success/failure, total count, N new, M updated; optionally K removed).
 - [ ] **Price filter** is applied: build_page.py only includes listings within configured price_max (and optional price_min).
-- [ ] **30-day phased removal** is implemented: listings with last_seen older than 30 days are marked or excluded; build_page shows only listings within the 30-day window (and price range).
+- [x] **30-day phased removal** is implemented: listings with last_seen older than 30 days are excluded at read time (view-based); build_page shows only listings within the 30-day window (and price range). K removed in run_status is optional and not implemented.
 - [ ] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list (filtered by price and 30-day window) and run status indicator.
 - [ ] **End-to-end** (fetch → build_page) runs locally and produces a valid HTML page with at least one listing and run status visible.
 

@@ -35,6 +35,9 @@ BRIGHTDATA_KEYWORD = "BRIGHTDATA_KEYWORD"
 BRIGHTDATA_CITY = "BRIGHTDATA_CITY"
 BRIGHTDATA_RADIUS_MILES = "BRIGHTDATA_RADIUS_MILES"
 BRIGHTDATA_LIMIT_PER_INPUT = "BRIGHTDATA_LIMIT_PER_INPUT"
+# Optional dataset-level filters (used with Filter Dataset API)
+BRIGHTDATA_FILTER_COUNTRY = "BRIGHTDATA_FILTER_COUNTRY"
+BRIGHTDATA_FILTER_LOCATION_INCLUDES = "BRIGHTDATA_FILTER_LOCATION_INCLUDES"
 
 DEFAULT_DATASET_ID = "gd_lvt9iwuh6fbcwmx1a"
 DEFAULT_KEYWORD = "Apartment"
@@ -44,10 +47,15 @@ DEFAULT_RADIUS_MILES = 20
 DEFAULT_LIMIT_PER_INPUT = 100
 DEFAULT_DB = "listings.db"
 
+# Defaults for dataset-side filtering (Filter Dataset API)
+DEFAULT_FILTER_COUNTRY = "US"
+DEFAULT_FILTER_LOCATION_INCLUDES = "Utah"
+
 TRIGGER_URL = "https://api.brightdata.com/datasets/v3/trigger"
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
 # Match scrape_download.py: GET /datasets/v3/snapshot/{id}?format=json (no /download path)
 SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
+FILTER_DATASET_URL = "https://api.brightdata.com/datasets/filter"
 
 POLL_INTERVAL_SEC = 15
 POLL_TIMEOUT_SEC = 300  # 5 min
@@ -290,6 +298,82 @@ def download_snapshot(api_key: str, snapshot_id: str) -> list[dict]:
         return []
 
 
+def _build_dataset_filter(
+    country: str | None, location_includes: str | None
+) -> dict | None:
+    """
+    Build a DatasetFilter JSON object for the Filter Dataset API.
+
+    Uses documented operators from:
+    https://docs.brightdata.com/api-reference/marketplace-dataset-api/filter-dataset
+    """
+    filters: list[dict] = []
+    if country:
+        filters.append(
+            {
+                "name": "country_code",
+                "operator": "=",
+                "value": country,
+            }
+        )
+    if location_includes:
+        filters.append(
+            {
+                "name": "location",
+                "operator": "includes",
+                "value": location_includes,
+            }
+        )
+    if not filters:
+        return None
+    if len(filters) == 1:
+        return filters[0]
+    return {"operator": "and", "filters": filters}
+
+
+def filter_dataset_snapshot(
+    api_key: str,
+    dataset_id: str,
+    filter_def: dict,
+    records_limit: int | None = None,
+) -> str | None:
+    """
+    Call Bright Data's Filter Dataset API to create a filtered snapshot.
+
+    Returns snapshot_id on success, or None on failure.
+    """
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload: dict[str, object] = {
+        "dataset_id": dataset_id,
+        "filter": filter_def,
+    }
+    if records_limit is not None:
+        payload["records_limit"] = int(records_limit)
+    try:
+        r = requests.post(
+            FILTER_DATASET_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT_SEC
+        )
+        if not r.ok:
+            try:
+                err_body = r.json()
+            except Exception:
+                err_body = r.text[:500] if r.text else "(empty)"
+            log.error("Filter dataset %s: %s", r.status_code, err_body)
+            return None
+        data = r.json()
+        sid = data.get("snapshot_id")
+        if sid:
+            return str(sid)
+        log.error("Filter dataset response missing snapshot_id: %s", data)
+        return None
+    except requests.RequestException as e:
+        log.exception("Filter dataset request failed: %s", e)
+        return None
+    except json.JSONDecodeError as e:
+        log.error("Filter dataset response not JSON: %s", e)
+        return None
+
+
 def run_fetch(
     db_path: str,
     api_key: str,
@@ -299,18 +383,52 @@ def run_fetch(
     radius_miles: int = DEFAULT_RADIUS_MILES,
     limit_per_input: int = DEFAULT_LIMIT_PER_INPUT,
 ) -> int:
-    """Trigger collection, wait for ready, download, upsert. Returns count of listings upserted."""
-    snapshot_id = trigger_collection(
-        api_key,
-        dataset_id,
-        keyword,
-        city,
-        radius_miles=radius_miles,
-        limit_per_input=limit_per_input,
-    )
+    """
+    Create a filtered snapshot (country/location) when possible, wait for ready,
+    download, and upsert into SQLite. Returns count of listings upserted.
+    """
+    # Prefer dataset-side filtering (country + location) to reduce non-Utah noise.
+    filter_country = _env(BRIGHTDATA_FILTER_COUNTRY, DEFAULT_FILTER_COUNTRY) or None
+    filter_location = _env(
+        BRIGHTDATA_FILTER_LOCATION_INCLUDES, DEFAULT_FILTER_LOCATION_INCLUDES
+    ) or None
+    filter_def = _build_dataset_filter(filter_country, filter_location)
+
+    snapshot_id: str | None = None
+    if filter_def is not None:
+        log.info(
+            "Requesting filtered snapshot via Filter Dataset API "
+            "(country=%r, location includes=%r)",
+            filter_country,
+            filter_location,
+        )
+        snapshot_id = filter_dataset_snapshot(
+            api_key,
+            dataset_id,
+            filter_def,
+            records_limit=limit_per_input,
+        )
+
+    # Fallback: if filter API failed or filters are disabled, use trigger_collection.
     if not snapshot_id:
-        return 0
-    log.info("Triggered snapshot_id=%s", snapshot_id)
+        log.info(
+            "Falling back to trigger_collection (keyword=%r, city=%r, radius_miles=%r)",
+            keyword,
+            city,
+            radius_miles,
+        )
+        snapshot_id = trigger_collection(
+            api_key,
+            dataset_id,
+            keyword,
+            city,
+            radius_miles=radius_miles,
+            limit_per_input=limit_per_input,
+        )
+        if not snapshot_id:
+            return 0
+
+    log.info("Using snapshot_id=%s", snapshot_id)
     if not wait_for_ready(api_key, snapshot_id):
         return 0
     records = download_snapshot(api_key, snapshot_id)

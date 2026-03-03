@@ -142,6 +142,25 @@ python main.py             # real Bright Data fetch, then print listings
 
 ---
 
+### `build_page.py` and run_status (Phase 1)
+
+Phase 1 adds **run status** tracking and a **static HTML page** generated from the SQLite DB.
+
+- **run_status table** (`db.py`):
+  - Single row (id=1) with: `last_run_ts`, `success`, `scraped`, `thrown`, `duplicate`, `added`, `total_count`, `new_count`, `updated_count`, `llm_processed`, `displayed`.
+  - Updated by `fetch.py` after each run (`update_run_status_after_fetch`), by the future LLM step (`update_run_status_after_llm`), and by `build_page.py` after rendering (`update_run_status_after_build_page(conn, displayed=N)`).
+  - **K removed** (count of listings phased out by the 30-day window) is **optional** per plan and is **not** stored in `run_status` in the current implementation.
+
+- **build_page.py**:
+  - Reads from env: `LISTINGS_DB`, `BUILD_PAGE_OUTPUT` (default `docs`), `PRICE_MAX`, `PRICE_MIN`.
+  - Opens the DB, queries listings that are **(a)** within the configured price range and **(b)** within the **30-day window** (see below), and reads `run_status`.
+  - Renders static HTML: run-status banner then list of listings (title, link, price, beds, baths, address). Writes `index.html` under the output directory, then calls `update_run_status_after_build_page(conn, displayed=len(listings))`.
+
+**30-day phased removal (view-based):**
+- Listings are considered **removed** for display purposes when `last_seen` is older than 30 days. Phase 1 implements this as a **read-time filter** only: no `removed_at` or `status` column is added to the `listings` table. `build_page.py` uses a UTC cutoff `now - 30 days` and includes only rows with `last_seen >= cutoff`. Physical **row deletion** (garbage collection) of very old listings is **deferred** to a later phase or a separate maintenance script.
+
+---
+
 ### `scrape.py` and `scrape_download.py` – Experimental Scraper API helpers
 
 These two scripts are **standalone helpers** for working directly with Bright Data’s **Scraper API / Crawl API** separate from the main `fetch.py` Dataset pipeline. They are useful for ad‑hoc experiments and for debugging Bright Data behavior.
@@ -227,6 +246,9 @@ The project uses **pytest** with a modest but focused test suite aligned with th
 - `tests/unit/test_fetch_utils.py`
   - Covers `_source_listing_id`, `_numeric_listing_id`, `_norm_price`, `_norm_num`, `_address_raw`, and `normalize_record`, ensuring stable ids and canonical Marketplace URLs.
 
+- `tests/unit/test_build_page.py`
+  - Tests `_thirty_days_ago_iso()` cutoff ordering: 31 days ago is before cutoff, 29 days ago is after (guards against off-by-one in the 30-day window).
+
 - `tests/integration/test_phase0_fetch_dry_run.py`
   - Runs `run_fetch_dry_run` against a temp DB.
   - Confirms:
@@ -242,8 +264,7 @@ The project uses **pytest** with a modest but focused test suite aligned with th
     - DB has rows,
     - output contains the listing summary header.
 
-- Placeholder tests:
-  - `tests/integration/test_phase1_build_page_placeholder.py` – module‑level skipped until `build_page.py` and run‑status storage exist.
+  - `tests/integration/test_phase1_build_page_placeholder.py` – Phase 1: runs `run_fetch_dry_run` then `build_page`, asserts HTML contains run status and listing content and that `displayed` is updated; includes test that listings with `last_seen` older than 30 days are excluded from the page.
   - `tests/acceptance/test_pipeline_future_placeholder.py` – module‑level skipped; reserved for future full‑pipeline/multi‑site/robustness tests.
 
 ---
@@ -275,8 +296,9 @@ The project uses **pytest** with a modest but focused test suite aligned with th
   - Experimental:
     - Scraper API helpers (`scrape.py`, `scrape_download.py`) plus `snapshot_history.jsonl`.
 
-- **Planned next steps (per `plan/` docs, not yet in code):**
-  - Phase 1: run‑status persistence and static webpage generator (`build_page.py`), including a run‑status banner on the page.
+- **Phase 1 (implemented):**
+  - run_status table and updates from `fetch.py` and `build_page.py`; static webpage generator `build_page.py` with price filter and **view-based 30-day removal** (filter by `last_seen` at read time; no `removed_at` column; run_status does not track K removed).
+- **Planned next steps (per `plan/` docs):**
   - Phase 2+: TOML config loader, Claude API extraction for new in‑range listings only, GitHub Actions workflows, multi‑site support, and robustness improvements.
 
 This document should be updated whenever major architectural changes are made (new phases implemented, new components added, or responsibilities of existing modules change).
