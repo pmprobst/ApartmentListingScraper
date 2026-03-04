@@ -69,7 +69,7 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Create core tables if they do not exist. Idempotent."""
+    """Create core tables if they do not exist and ensure schema is up to date."""
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS listings (
@@ -85,7 +85,11 @@ def init_schema(conn: sqlite3.Connection) -> None:
             baths REAL,
             first_seen TEXT NOT NULL,
             last_seen TEXT NOT NULL,
-            extracted TEXT,
+            washer_dryer TEXT,
+            renter_paid_fees TEXT,
+            availability TEXT,
+            pet_policy TEXT,
+            roommates TEXT,
             canonical_listing_id INTEGER,
             UNIQUE(source, source_listing_id)
         )
@@ -109,6 +113,21 @@ def init_schema(conn: sqlite3.Connection) -> None:
         )
     """
     )
+
+    # Backfill newly added LLM-derived columns on existing databases.
+    cur = conn.execute("PRAGMA table_info(listings)")
+    existing_cols = {row[1] for row in cur.fetchall()}
+    llm_columns = {
+        "washer_dryer": "TEXT",
+        "renter_paid_fees": "TEXT",
+        "availability": "TEXT",
+        "pet_policy": "TEXT",
+        "roommates": "TEXT",
+    }
+    for col_name, col_type in llm_columns.items():
+        if col_name not in existing_cols:
+            conn.execute(f"ALTER TABLE listings ADD COLUMN {col_name} {col_type}")
+
     conn.commit()
 
 
@@ -128,7 +147,6 @@ def upsert_listing(
     price: float | None = None,
     beds: float | None = None,
     baths: float | None = None,
-    extracted: str | dict | list | None = None,
 ) -> None:
     """
     Insert or update one listing by (source, source_listing_id).
@@ -144,23 +162,12 @@ def upsert_listing(
     elif normalized_address is None:
         normalized_address = ""
 
-    # Ensure extracted is stored as a JSON string when structured data is provided
-    if extracted is None:
-        extracted_json = None
-    elif isinstance(extracted, str):
-        extracted_json = extracted
-    else:
-        try:
-            extracted_json = json.dumps(extracted, ensure_ascii=False, sort_keys=True)
-        except TypeError:
-            extracted_json = str(extracted)
-
     conn.execute(
         """
         INSERT INTO listings (
             source, source_listing_id, normalized_address, address_raw, link, title,
-            price, beds, baths, first_seen, last_seen, extracted, canonical_listing_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            price, beds, baths, first_seen, last_seen, canonical_listing_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         ON CONFLICT(source, source_listing_id) DO UPDATE SET
             normalized_address = excluded.normalized_address,
             address_raw = excluded.address_raw,
@@ -169,8 +176,7 @@ def upsert_listing(
             price = excluded.price,
             beds = excluded.beds,
             baths = excluded.baths,
-            last_seen = excluded.last_seen,
-            extracted = COALESCE(excluded.extracted, listings.extracted)
+            last_seen = excluded.last_seen
     """,
         (
             source,
@@ -184,7 +190,6 @@ def upsert_listing(
             baths,
             now,
             now,
-            extracted_json,
         ),
     )
 

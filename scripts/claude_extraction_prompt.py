@@ -15,10 +15,8 @@ EXTRACTION_FIELD_DOC = dedent(
       One of: "in_unit", "hookups_only", "shared_laundry",
       "laundry_in_building", "coin_op_on_site", "no_laundry", "not_mentioned".
 
-    - renter_paid_fees (array of strings or null):
-      Recurring costs the renter must pay in addition to base rent.
-      Examples: ["electricity", "gas", "water", "sewer", "trash", "internet",
-      "parking", "pet_rent"].
+    - renter_paid_fees (strings or null):
+      Recurring utility costs the renter must pay in addition to base rent.
 
     - availability (string or null):
       Short phrase like "ASAP", "March 1, 2026", "mid-March".
@@ -26,62 +24,10 @@ EXTRACTION_FIELD_DOC = dedent(
     - pet_policy (string or null):
       Short summary of which pets are allowed, deposits, and monthly pet rent.
 
-    - parking (string or null):
-      One of: "included_assigned", "included_unassigned", "garage_included",
-      "garage_extra_cost", "street_only", "paid_lot", "no_parking",
-      "not_mentioned".
-
-    - lease_length (string or null):
-      Examples: "month_to_month", "6_months", "12_months", "6_or_12_months",
-      "short_term", "unspecified".
-
-    - deposit (string or null):
-      Short description of deposit and whether refundable, e.g.
-      "$1200 refundable", "$500 non-refundable cleaning fee",
-      "first and last month’s rent".
-
-    - application_fees (string or null):
-      One-time application, admin, or move-in fees, e.g.
-      "$40 application fee per adult".
-
-    - furnished (string or null):
-      One of: "fully_furnished", "partially_furnished", "unfurnished",
-      "not_mentioned".
-
-    - square_footage (integer or null):
-      Square footage as an integer, e.g. 850. Use null if not mentioned.
-
     - roommates (string or null):
       Short summary such as "entire_unit",
       "private_room_in_3br_with_2_roommates",
       "shared_room", or "unspecified".
-
-    - subletting (string or null):
-      One of: "allowed", "not_allowed", "not_mentioned".
-
-    - contact (string or null):
-      Short description of who to contact and how, e.g.
-      "contact property manager via portal",
-      "text landlord at 555-123-4567".
-
-    - move_in_incentives (string or null):
-      Any discounts or incentives, e.g. "first month free",
-      "half off first month", "reduced deposit".
-
-    - amenities (array of strings or null):
-      Amenities as short tokens such as
-      ["central_ac", "dishwasher", "gym", "pool", "yard", "storage",
-      "laundry_in_unit", "clubhouse", "covered_parking"].
-
-    - restrictions (array of strings or null):
-      Restrictions as short tokens, e.g.
-      ["no_smoking", "no_pets", "students_only",
-       "credit_check_required", "background_check_required"].
-
-    - location_detail (string or null):
-      Short description of neighborhood or landmarks, e.g.
-      "near BYU", "near UVU", "Downtown Provo",
-      "close to I-15 and University Pkwy".
     """
 ).strip()
 

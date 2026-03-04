@@ -4,6 +4,7 @@ Reads DB path, output path, and price filter from env. Applies 30-day window.
 See plan/phase-1.md and plan/features.md.
 """
 
+import json
 import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -73,8 +74,23 @@ def build_page() -> None:
     try:
         rows = conn.execute(
             """
-            SELECT id, source, source_listing_id, link, title, price, beds, baths,
-                   address_raw, first_seen, last_seen
+            SELECT
+                id,
+                source,
+                source_listing_id,
+                link,
+                title,
+                price,
+                beds,
+                baths,
+                address_raw,
+                first_seen,
+                last_seen,
+                washer_dryer,
+                renter_paid_fees,
+                availability,
+                pet_policy,
+                roommates
             FROM listings
             WHERE last_seen >= ?
               AND (price IS NULL OR (price >= ? AND price <= ?))
@@ -136,11 +152,47 @@ def build_page() -> None:
                 beds_str = str(r["beds"]) if r["beds"] is not None else "—"
                 baths_str = str(r["baths"]) if r["baths"] is not None else "—"
                 addr = (r["address_raw"] or "").replace("<", "&lt;").replace(">", "&gt;")
+                washer_dryer = (r["washer_dryer"] or "").strip() if r["washer_dryer"] else ""
+                availability = (r["availability"] or "").strip() if r["availability"] else ""
+                pet_policy = (r["pet_policy"] or "").strip() if r["pet_policy"] else ""
+                roommates = (r["roommates"] or "").strip() if r["roommates"] else ""
+
+                renter_paid_fees_display = ""
+                raw_fees = r["renter_paid_fees"]
+                if raw_fees:
+                    try:
+                        parsed = json.loads(raw_fees)
+                    except (TypeError, json.JSONDecodeError):
+                        parsed = None
+                    if isinstance(parsed, list):
+                        renter_paid_fees_display = ", ".join(str(x) for x in parsed)
+                    else:
+                        renter_paid_fees_display = str(raw_fees)
+
                 html_parts.append("      <li>")
                 html_parts.append(f"        <a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a>")
                 html_parts.append(f"        — {price_str} | {beds_str} bed, {baths_str} bath")
                 if addr:
                     html_parts.append(f"        | {addr}")
+                llm_bits: list[str] = []
+                if washer_dryer:
+                    llm_bits.append(f"Washer/dryer: {washer_dryer}")
+                if pet_policy:
+                    llm_bits.append(f"Pets: {pet_policy}")
+                if availability:
+                    llm_bits.append(f"Availability: {availability}")
+                if roommates:
+                    llm_bits.append(f"Roommates: {roommates}")
+                if renter_paid_fees_display:
+                    llm_bits.append(f"Renter-paid: {renter_paid_fees_display}")
+                if llm_bits:
+                    llm_text = " | ".join(llm_bits)
+                    llm_text = (
+                        llm_text.replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
+                    )
+                    html_parts.append(f"        <br><small>{llm_text}</small>")
                 html_parts.append("      </li>")
             html_parts.append("    </ul>")
         html_parts.append("  </section>")

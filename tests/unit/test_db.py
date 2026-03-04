@@ -22,7 +22,7 @@ def test_init_schema_creates_listings_table(tmp_path):
             "PRAGMA table_info(listings)"
         )
         cols = {row[1] for row in cur.fetchall()}
-        # Core columns from reference.md
+        # Core columns from reference.md plus LLM-derived fields
         expected = {
             "id",
             "source",
@@ -36,7 +36,11 @@ def test_init_schema_creates_listings_table(tmp_path):
             "baths",
             "first_seen",
             "last_seen",
-            "extracted",
+            "washer_dryer",
+            "renter_paid_fees",
+            "availability",
+            "pet_policy",
+            "roommates",
             "canonical_listing_id",
         }
         assert expected.issubset(cols)
@@ -65,7 +69,8 @@ def test_normalize_address_basic_cases():
 def _fetch_single_listing(conn: sqlite3.Connection):
     cur = conn.execute(
         "SELECT source, source_listing_id, normalized_address, address_raw, link, "
-        "title, price, beds, baths, first_seen, last_seen, extracted "
+        "title, price, beds, baths, first_seen, last_seen, washer_dryer, "
+        "renter_paid_fees, availability, pet_policy, roommates "
         "FROM listings"
     )
     return cur.fetchone()
@@ -125,8 +130,8 @@ def test_upsert_listing_inserts_and_updates(tmp_path):
         conn.close()
 
 
-def test_upsert_listing_coalesces_extracted(tmp_path):
-    db_path = tmp_path / "upsert_extracted.db"
+def test_llm_columns_present_and_nullable(tmp_path):
+    db_path = tmp_path / "llm_columns.db"
     conn = get_connection(str(db_path))
     try:
         upsert_listing(
@@ -136,23 +141,14 @@ def test_upsert_listing_coalesces_extracted(tmp_path):
             link="https://example.com/xyz789",
             address_raw="1 Test St, Orem UT",
             title="Listing",
-            extracted='{"foo": "bar"}',
         )
-        row1 = _fetch_single_listing(conn)
-        assert row1["extracted"] == '{"foo": "bar"}'
-
-        # Second upsert with extracted=None should preserve previous extracted value
-        upsert_listing(
-            conn,
-            source="facebook_marketplace",
-            source_listing_id="xyz789",
-            link="https://example.com/xyz789",
-            address_raw="1 Test St, Orem UT",
-            title="Listing updated",
-            extracted=None,
-        )
-        row2 = _fetch_single_listing(conn)
-        assert row2["extracted"] == '{"foo": "bar"}'
+        row = _fetch_single_listing(conn)
+        assert row is not None
+        assert row["washer_dryer"] is None
+        assert row["renter_paid_fees"] is None
+        assert row["availability"] is None
+        assert row["pet_policy"] is None
+        assert row["roommates"] is None
     finally:
         conn.close()
 
