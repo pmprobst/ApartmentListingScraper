@@ -138,6 +138,12 @@ def normalize_record(record: dict) -> dict:
         if link and not link.startswith("http"):
             link = f"{MARKETPLACE_ITEM_BASE}/" + link.lstrip("/")
         link = link or "https://www.facebook.com/marketplace"
+    listing_date = record.get("listing_date")
+    if isinstance(listing_date, str) and listing_date.strip():
+        listing_date = listing_date.strip()
+    else:
+        listing_date = None
+
     return {
         "source_listing_id": _source_listing_id(record),
         "link": link,
@@ -151,6 +157,7 @@ def normalize_record(record: dict) -> dict:
         "beds": _norm_num(record.get("beds") or record.get("bedrooms") or record.get("bed")),
         "baths": _norm_num(record.get("baths") or record.get("bathrooms") or record.get("bath")),
         "address_raw": _address_raw(record),
+        "listing_date": listing_date,
     }
 
 
@@ -225,6 +232,7 @@ def ingest_records(db_path: str, records: list[dict]) -> int:
                 beds=norm.get("beds"),
                 baths=norm.get("baths"),
                 address_raw=norm.get("address_raw"),
+                listing_date=norm.get("listing_date"),
             )
             processed += 1
         total_count = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]

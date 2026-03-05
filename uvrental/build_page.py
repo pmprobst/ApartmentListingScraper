@@ -59,6 +59,17 @@ def _format_run_ts(iso_ts: str | None) -> str:
         return str(iso_ts)
 
 
+def _format_listing_date(iso_ts: str | None) -> str:
+    """Format listing_date for display (date only)."""
+    if not iso_ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+        return dt.strftime("%Y-%m-%d")
+    except Exception:
+        return str(iso_ts)
+
+
 def build_page() -> None:
     """
     Read listings (within price range and 30-day window) and run_status from SQLite,
@@ -86,6 +97,7 @@ def build_page() -> None:
                 address_raw,
                 first_seen,
                 last_seen,
+                listing_date,
                 washer_dryer,
                 renter_paid_fees,
                 availability,
@@ -169,11 +181,14 @@ def build_page() -> None:
                     else:
                         renter_paid_fees_display = str(raw_fees)
 
+                listing_date_str = _format_listing_date(r["listing_date"])
                 html_parts.append("      <li>")
                 html_parts.append(f"        <a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a>")
                 html_parts.append(f"        — {price_str} | {beds_str} bed, {baths_str} bath")
                 if addr:
                     html_parts.append(f"        | {addr}")
+                if listing_date_str:
+                    html_parts.append(f"        | Listed {listing_date_str}")
                 llm_bits: list[str] = []
                 if washer_dryer:
                     llm_bits.append(f"Washer/dryer: {washer_dryer}")

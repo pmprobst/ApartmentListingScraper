@@ -90,6 +90,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
             availability TEXT,
             pet_policy TEXT,
             roommates TEXT,
+            listing_date TEXT,
             canonical_listing_id INTEGER,
             UNIQUE(source, source_listing_id)
         )
@@ -128,6 +129,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
         if col_name not in existing_cols:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {col_name} {col_type}")
 
+    if "listing_date" not in existing_cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN listing_date TEXT")
+
     conn.commit()
 
 
@@ -147,6 +151,7 @@ def upsert_listing(
     price: float | None = None,
     beds: float | None = None,
     baths: float | None = None,
+    listing_date: str | None = None,
 ) -> None:
     """
     Insert or update one listing by (source, source_listing_id).
@@ -166,8 +171,8 @@ def upsert_listing(
         """
         INSERT INTO listings (
             source, source_listing_id, normalized_address, address_raw, link, title,
-            price, beds, baths, first_seen, last_seen, canonical_listing_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            price, beds, baths, first_seen, last_seen, listing_date, canonical_listing_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         ON CONFLICT(source, source_listing_id) DO UPDATE SET
             normalized_address = excluded.normalized_address,
             address_raw = excluded.address_raw,
@@ -176,7 +181,8 @@ def upsert_listing(
             price = excluded.price,
             beds = excluded.beds,
             baths = excluded.baths,
-            last_seen = excluded.last_seen
+            last_seen = excluded.last_seen,
+            listing_date = COALESCE(excluded.listing_date, listings.listing_date)
     """,
         (
             source,
@@ -190,6 +196,7 @@ def upsert_listing(
             baths,
             now,
             now,
+            listing_date,
         ),
     )
 

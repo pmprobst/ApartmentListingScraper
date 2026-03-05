@@ -54,9 +54,17 @@ EXTRACTION_FIELD_DOC = dedent(
       Short summary of which pets are allowed, deposits, and monthly pet rent.
 
     - roommates (string or null):
-      Short summary such as "entire_unit",
-      "private_room_in_3br_with_2_roommates",
-      "shared_room", or "unspecified".
+      Whether the listing is for the whole unit or a room in a shared situation.
+      Use "entire_unit" ONLY when the listing clearly indicates the renter gets
+      the whole dwelling with no roommates (e.g. "entire apartment", "no
+      roommates", "you have the place to yourself"). If the description
+      mentions roommates, housemates, shared living, or other tenants (e.g.
+      "roommates are courteous", "live with 2 others", "shared common areas"),
+      do NOT use "entire_unit"; use instead a short summary such as
+      "private_room_in_3br_with_roommates", "shared_room", or
+      "private_room_shared_common_areas". Use "unspecified" only when it is
+      genuinely unclear. Prefer the text's explicit signals over inferring from
+      beds/price alone.
     """
 ).strip()
 
@@ -67,7 +75,10 @@ def _system_prompt() -> str:
         "You read listing text (title + description and simple metadata) and "
         "output strictly valid JSON according to the given schema. "
         "If something is not clearly stated, use null or the explicit "
-        '"not_mentioned" enum instead of guessing.\n\n'
+        '"not_mentioned" enum instead of guessing. '
+        "For roommates vs entire unit: treat explicit wording in the description "
+        "(e.g. \"roommates\", \"housemates\", \"shared\") as decisive—do not "
+        "override it based on beds or price.\n\n"
         "Rules:\n"
         "- Return exactly one JSON object.\n"
         "- Do not include any explanation, comments, or extra keys.\n"

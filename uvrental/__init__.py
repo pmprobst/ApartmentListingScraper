@@ -9,10 +9,13 @@ This package exposes the main building blocks:
 - pipeline: high-level orchestration helpers
 """
 
-from . import db  # noqa: F401
-from . import ingest  # noqa: F401
-from . import build_page  # noqa: F401
-from . import pipeline  # noqa: F401
-
 __all__ = ["db", "ingest", "build_page", "pipeline"]
+
+
+def __getattr__(name: str):
+    """Lazy-load submodules so `python -m uvrental.build_page` does not preload them."""
+    if name in __all__:
+        import importlib
+        return importlib.import_module(f".{name}", __name__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
