@@ -170,7 +170,7 @@ def build_page() -> None:
         else:
             html_parts.append("    <table><thead><tr>")
             html_parts.append("      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>")
-            html_parts.append("      <th>Address</th><th>Listed</th>")
+            html_parts.append("      <th>Address</th><th>Listing date</th>")
             html_parts.append("      <th>Washer/dryer</th><th>Pets</th><th>Availability</th><th>Roommates</th><th>Renter-paid</th>")
             html_parts.append("    </tr></thead><tbody>")
             for r in rows:
