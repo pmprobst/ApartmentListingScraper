@@ -4,12 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Utah Valley Rentals</title>
+  <style>
+    .listings table { border-collapse: collapse; font-size: 1em; }
+    .listings th, .listings td { border: 1px solid #ccc; padding: 0.25em 0.5em; text-align: left; }
+    .listings th { background: #f5f5f5; }
+  </style>
 </head>
 <body>
   <h1>Utah Valley Rentals</h1>
   <section class="run-status" aria-label="Run status">
     <h2>Run status</h2>
-    <p><strong>Last run:</strong> 2026-03-05 20:59 UTC (success)</p>
+    <p><strong>Last run:</strong> 2026-03-05 21:21 UTC (success)</p>
     <ul>
       <li>Scraped: 5</li>
       <li>Thrown: 0</li>
@@ -24,84 +29,102 @@
   </section>
   <section class="listings" aria-label="Listings">
     <h2>Listings</h2>
-    <ul>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1631374138149033/" rel="noopener noreferrer">Men’s Apartment (2 Contracts)</a>
-        — $485 | — bed, — bath
-        | Provo, UT
-        <br><small>Washer/dryer: not_mentioned | Availability: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/849838404739884/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a>
-        — $300 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1862820210798941/" rel="noopener noreferrer">4 Beds 2 Baths - Apartment</a>
-        — $559 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/9332395593464003/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a>
-        — $975 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/810711982067224/" rel="noopener noreferrer">2 Beds 1 Bath Apartment</a>
-        — $1150 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/2362849057546866/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a>
-        — $560 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1879189636805768/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a>
-        — $450 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1359809769520242/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a>
-        — $435 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/2090083335117651/" rel="noopener noreferrer">2 Beds 1 Bath Apartment</a>
-        — $1150 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1438742454382779/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a>
-        — $1080 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1581709819741230/" rel="noopener noreferrer">3 Beds 2 Baths - Apartment</a>
-        — $395 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/4357309121148787/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a>
-        — $545 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1321902003328921/" rel="noopener noreferrer">3 Beds 2 Baths - Apartment</a>
-        — $500 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1964653734114484/" rel="noopener noreferrer">2 Beds 1 Bath - Apartment</a>
-        — $559 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-      <li>
-        <a href="https://www.facebook.com/marketplace/item/1263777282299689/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a>
-        — $550 | — bed, — bath
-        <br><small>Washer/dryer: not_mentioned | Roommates: entire_unit</small>
-      </li>
-    </ul>
+    <table><thead><tr>
+      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>
+      <th>Address</th><th>Listed</th>
+      <th>Washer/dryer</th><th>Pets</th><th>Availability</th><th>Roommates</th><th>Renter-paid</th>
+    </tr></thead><tbody>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1631374138149033/" rel="noopener noreferrer">Men’s Apartment (2 Contracts)</a></td>
+        <td>$485</td><td>—</td><td>—</td>
+        <td>Provo, UT</td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>not_mentioned</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/849838404739884/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a></td>
+        <td>$300</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1862820210798941/" rel="noopener noreferrer">4 Beds 2 Baths - Apartment</a></td>
+        <td>$559</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>—</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/9332395593464003/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a></td>
+        <td>$975</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/810711982067224/" rel="noopener noreferrer">2 Beds 1 Bath Apartment</a></td>
+        <td>$1150</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/2362849057546866/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a></td>
+        <td>$560</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1879189636805768/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a></td>
+        <td>$450</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1359809769520242/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a></td>
+        <td>$435</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/2090083335117651/" rel="noopener noreferrer">2 Beds 1 Bath Apartment</a></td>
+        <td>$1150</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1438742454382779/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a></td>
+        <td>$1080</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1581709819741230/" rel="noopener noreferrer">3 Beds 2 Baths - Apartment</a></td>
+        <td>$395</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/4357309121148787/" rel="noopener noreferrer">1 Bed 1 Bath Apartment</a></td>
+        <td>$545</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1321902003328921/" rel="noopener noreferrer">3 Beds 2 Baths - Apartment</a></td>
+        <td>$500</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>—</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1964653734114484/" rel="noopener noreferrer">2 Beds 1 Bath - Apartment</a></td>
+        <td>$559</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.facebook.com/marketplace/item/1263777282299689/" rel="noopener noreferrer">1 Bed 1 Bath - Apartment</a></td>
+        <td>$550</td><td>—</td><td>—</td>
+        <td></td><td>—</td>
+        <td>not_mentioned</td><td>—</td><td>—</td><td>entire_unit</td><td>—</td>
+      </tr>
+    </tbody></table>
   </section>
 </body>
 </html>

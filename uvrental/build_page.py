@@ -70,6 +70,13 @@ def _format_listing_date(iso_ts: str | None) -> str:
         return str(iso_ts)
 
 
+def _escape_html(s: str) -> str:
+    """Escape &, <, > for HTML. Pass-through for placeholder —."""
+    if s == "—":
+        return s
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def build_page() -> None:
     """
     Read listings (within price range and 30-day window) and run_status from SQLite,
@@ -121,6 +128,11 @@ def build_page() -> None:
             "  <meta charset=\"utf-8\">",
             "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
             "  <title>Utah Valley Rentals</title>",
+            "  <style>",
+            "    .listings table { border-collapse: collapse; font-size: 1em; }",
+            "    .listings th, .listings td { border: 1px solid #ccc; padding: 0.25em 0.5em; text-align: left; }",
+            "    .listings th { background: #f5f5f5; }",
+            "  </style>",
             "</head>",
             "<body>",
             "  <h1>Utah Valley Rentals</h1>",
@@ -156,20 +168,24 @@ def build_page() -> None:
         if not rows:
             html_parts.append("    <p>No listings in range (price and 30-day window).</p>")
         else:
-            html_parts.append("    <ul>")
+            html_parts.append("    <table><thead><tr>")
+            html_parts.append("      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>")
+            html_parts.append("      <th>Address</th><th>Listed</th>")
+            html_parts.append("      <th>Washer/dryer</th><th>Pets</th><th>Availability</th><th>Roommates</th><th>Renter-paid</th>")
+            html_parts.append("    </tr></thead><tbody>")
             for r in rows:
                 title = (r["title"] or "No title").replace("<", "&lt;").replace(">", "&gt;")
                 link = (r["link"] or "#").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 price_str = f"${r['price']:.0f}" if r["price"] is not None else "—"
                 beds_str = str(r["beds"]) if r["beds"] is not None else "—"
                 baths_str = str(r["baths"]) if r["baths"] is not None else "—"
-                addr = (r["address_raw"] or "").replace("<", "&lt;").replace(">", "&gt;")
-                washer_dryer = (r["washer_dryer"] or "").strip() if r["washer_dryer"] else ""
-                availability = (r["availability"] or "").strip() if r["availability"] else ""
-                pet_policy = (r["pet_policy"] or "").strip() if r["pet_policy"] else ""
-                roommates = (r["roommates"] or "").strip() if r["roommates"] else ""
-
-                renter_paid_fees_display = ""
+                addr = (r["address_raw"] or "").replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
+                listing_date_str = _format_listing_date(r["listing_date"]) or "—"
+                washer_dryer = (r["washer_dryer"] or "").strip() if r["washer_dryer"] else "—"
+                availability = (r["availability"] or "").strip() if r["availability"] else "—"
+                pet_policy = (r["pet_policy"] or "").strip() if r["pet_policy"] else "—"
+                roommates = (r["roommates"] or "").strip() if r["roommates"] else "—"
+                renter_paid_fees_display = "—"
                 raw_fees = r["renter_paid_fees"]
                 if raw_fees:
                     try:
@@ -181,35 +197,17 @@ def build_page() -> None:
                     else:
                         renter_paid_fees_display = str(raw_fees)
 
-                listing_date_str = _format_listing_date(r["listing_date"])
-                html_parts.append("      <li>")
-                html_parts.append(f"        <a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a>")
-                html_parts.append(f"        — {price_str} | {beds_str} bed, {baths_str} bath")
-                if addr:
-                    html_parts.append(f"        | {addr}")
-                if listing_date_str:
-                    html_parts.append(f"        | Listed {listing_date_str}")
-                llm_bits: list[str] = []
-                if washer_dryer:
-                    llm_bits.append(f"Washer/dryer: {washer_dryer}")
-                if pet_policy:
-                    llm_bits.append(f"Pets: {pet_policy}")
-                if availability:
-                    llm_bits.append(f"Availability: {availability}")
-                if roommates:
-                    llm_bits.append(f"Roommates: {roommates}")
-                if renter_paid_fees_display:
-                    llm_bits.append(f"Renter-paid: {renter_paid_fees_display}")
-                if llm_bits:
-                    llm_text = " | ".join(llm_bits)
-                    llm_text = (
-                        llm_text.replace("&", "&amp;")
-                        .replace("<", "&lt;")
-                        .replace(">", "&gt;")
-                    )
-                    html_parts.append(f"        <br><small>{llm_text}</small>")
-                html_parts.append("      </li>")
-            html_parts.append("    </ul>")
+                html_parts.append("      <tr>")
+                html_parts.append(f"        <td><a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a></td>")
+                html_parts.append(f"        <td>{price_str}</td><td>{beds_str}</td><td>{baths_str}</td>")
+                html_parts.append(f"        <td>{addr}</td><td>{listing_date_str}</td>")
+                html_parts.append(
+                    f"        <td>{_escape_html(washer_dryer)}</td><td>{_escape_html(pet_policy)}</td>"
+                    f"<td>{_escape_html(availability)}</td><td>{_escape_html(roommates)}</td>"
+                    f"<td>{_escape_html(renter_paid_fees_display)}</td>"
+                )
+                html_parts.append("      </tr>")
+            html_parts.append("    </tbody></table>")
         html_parts.append("  </section>")
 
         html_parts.append("</body>")
