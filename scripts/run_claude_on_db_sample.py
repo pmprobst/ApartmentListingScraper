@@ -6,14 +6,17 @@ Usage:
 
 - Reads DB path from LISTINGS_DB (default: listings.db).
 - Selects the most recent listings by last_seen (default limit: 3).
-- Calls the Claude API for each listing using `uvrental.claude_client`.
+- Uses the extraction pipeline's Claude API (extraction_claude) with
+  title, description, and optional pre-fill from existing DB columns.
 - Prints extracted fields and latency for manual inspection.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,7 +29,8 @@ if str(PROJECT_ROOT) not in sys.path:
 load_dotenv(PROJECT_ROOT / ".env")
 
 from uvrental.db import get_connection  # noqa: E402
-from uvrental.claude_client import extract_from_text  # noqa: E402
+from uvrental.extraction_claude import call_claude  # noqa: E402
+from uvrental.extraction_pipeline import row_to_stage1_prefill  # noqa: E402
 
 
 def main(argv: list[str]) -> None:
@@ -44,7 +48,9 @@ def main(argv: list[str]) -> None:
     try:
         rows = conn.execute(
             """
-            SELECT id, title, price, beds, baths, address_raw
+            SELECT id, title, description, beds, baths, in_unit_washer_dryer,
+                   has_roommates, gender_preference, utilities_included,
+                   non_included_utilities_cost, lease_length
             FROM listings
             ORDER BY last_seen DESC, id DESC
             LIMIT ?
@@ -62,33 +68,25 @@ def main(argv: list[str]) -> None:
         print("\n" + "=" * 60)
         print(f"Listing {idx}/{len(rows)} (id={r['id']}):")
         print(f"  title: {r['title']!r}")
-        print(f"  price: {r['price']!r}")
-        print(f"  beds:  {r['beds']!r}")
-        print(f"  baths: {r['baths']!r}")
-        print(f"  addr:  {r['address_raw']!r}")
-
-        extracted, latency = extract_from_text(
-            title=r["title"] or "",
-            # NOTE: description is not stored in the DB today, so we pass an
-            # empty string here. For best-quality extraction in the future,
-            # we will call Claude during snapshot ingestion when full text is available.
-            description="",
-            price=r["price"],
-            beds=r["beds"],
-            baths=r["baths"],
-            address_raw=r["address_raw"],
-        )
-
+        raw_desc = r["description"] or ""
+        desc = raw_desc[:80] + ("..." if len(raw_desc) > 80 else "")
+        print(f"  description: {desc!r}")
+        stage1 = row_to_stage1_prefill(r)
+        t0 = time.perf_counter()
+        try:
+            extracted = call_claude(
+                r["title"] or "",
+                r["description"] or "",
+                stage1,
+            )
+            latency = time.perf_counter() - t0
+        except Exception as e:
+            print(f"Claude error: {e}")
+            continue
         print(f"Claude latency: {latency:.2f}s")
-        if extracted is None:
-            print("Extraction failed (no JSON parsed).")
-        else:
-            import json as _json
-
-            print("Extracted fields:")
-            print(_json.dumps(extracted, indent=2, ensure_ascii=False))
+        print("Extracted fields:")
+        print(json.dumps(extracted, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-

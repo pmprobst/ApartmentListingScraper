@@ -101,15 +101,9 @@ def build_page() -> None:
                 price,
                 beds,
                 baths,
-                address_raw,
                 first_seen,
                 last_seen,
                 listing_date,
-                washer_dryer,
-                renter_paid_fees,
-                availability,
-                pet_policy,
-                roommates,
                 in_unit_washer_dryer,
                 has_roommates,
                 gender_preference,
@@ -176,8 +170,7 @@ def build_page() -> None:
         else:
             html_parts.append("    <table><thead><tr>")
             html_parts.append("      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>")
-            html_parts.append("      <th>Address</th><th>Listing date</th>")
-            html_parts.append("      <th>Washer/dryer</th><th>Pets</th><th>Availability</th><th>Roommates</th><th>Renter-paid</th>")
+            html_parts.append("      <th>Listing date</th>")
             html_parts.append("      <th>In-unit W/D</th><th>Has roommates</th><th>Gender</th><th>Utilities</th><th>Util cost</th><th>Lease</th>")
             html_parts.append("    </tr></thead><tbody>")
             for r in rows:
@@ -186,33 +179,12 @@ def build_page() -> None:
                 price_str = f"${r['price']:.0f}" if r["price"] is not None else "—"
                 beds_str = str(r["beds"]) if r["beds"] is not None else "—"
                 baths_str = str(r["baths"]) if r["baths"] is not None else "—"
-                addr = (r["address_raw"] or "").replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
                 listing_date_str = _format_listing_date(r["listing_date"]) or "—"
-                washer_dryer = (r["washer_dryer"] or "").strip() if r["washer_dryer"] else "—"
-                availability = (r["availability"] or "").strip() if r["availability"] else "—"
-                pet_policy = (r["pet_policy"] or "").strip() if r["pet_policy"] else "—"
-                roommates = (r["roommates"] or "").strip() if r["roommates"] else "—"
-                renter_paid_fees_display = "—"
-                raw_fees = r["renter_paid_fees"]
-                if raw_fees:
-                    try:
-                        parsed = json.loads(raw_fees)
-                    except (TypeError, json.JSONDecodeError):
-                        parsed = None
-                    if isinstance(parsed, list):
-                        renter_paid_fees_display = ", ".join(str(x) for x in parsed)
-                    else:
-                        renter_paid_fees_display = str(raw_fees)
 
                 html_parts.append("      <tr>")
                 html_parts.append(f"        <td><a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a></td>")
                 html_parts.append(f"        <td>{price_str}</td><td>{beds_str}</td><td>{baths_str}</td>")
-                html_parts.append(f"        <td>{addr}</td><td>{listing_date_str}</td>")
-                html_parts.append(
-                    f"        <td>{_escape_html(washer_dryer)}</td><td>{_escape_html(pet_policy)}</td>"
-                    f"<td>{_escape_html(availability)}</td><td>{_escape_html(roommates)}</td>"
-                    f"<td>{_escape_html(renter_paid_fees_display)}</td>"
-                )
+                html_parts.append(f"        <td>{listing_date_str}</td>")
                 # Extraction-plan columns (in_unit_washer_dryer, has_roommates, etc.)
                 # sqlite3.Row has no .get(); use key check and [] for optional columns.
                 keys = r.keys()

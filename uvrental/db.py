@@ -77,7 +77,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             source TEXT NOT NULL,
             source_listing_id TEXT NOT NULL,
             normalized_address TEXT,
-            address_raw TEXT,
             link TEXT NOT NULL,
             title TEXT,
             price REAL,
@@ -85,11 +84,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             baths REAL,
             first_seen TEXT NOT NULL,
             last_seen TEXT NOT NULL,
-            washer_dryer TEXT,
-            renter_paid_fees TEXT,
-            availability TEXT,
-            pet_policy TEXT,
-            roommates TEXT,
             listing_date TEXT,
             description TEXT,
             in_unit_washer_dryer INTEGER,
@@ -123,20 +117,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
     """
     )
 
-    # Backfill newly added LLM-derived columns on existing databases.
+    # Backfill newly added columns on existing databases.
     cur = conn.execute("PRAGMA table_info(listings)")
     existing_cols = {row[1] for row in cur.fetchall()}
-    llm_columns = {
-        "washer_dryer": "TEXT",
-        "renter_paid_fees": "TEXT",
-        "availability": "TEXT",
-        "pet_policy": "TEXT",
-        "roommates": "TEXT",
-    }
-    for col_name, col_type in llm_columns.items():
-        if col_name not in existing_cols:
-            conn.execute(f"ALTER TABLE listings ADD COLUMN {col_name} {col_type}")
-
     if "listing_date" not in existing_cols:
         conn.execute("ALTER TABLE listings ADD COLUMN listing_date TEXT")
     for col, ctype in [
@@ -151,6 +134,23 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ]:
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {col} {ctype}")
+
+    # Drop removed columns from older schema (requires SQLite 3.35+).
+    cur = conn.execute("PRAGMA table_info(listings)")
+    current_cols = {row[1] for row in cur.fetchall()}
+    for col in (
+        "address_raw",
+        "washer_dryer",
+        "renter_paid_fees",
+        "availability",
+        "pet_policy",
+        "roommates",
+    ):
+        if col in current_cols:
+            try:
+                conn.execute(f"ALTER TABLE listings DROP COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass  # SQLite < 3.35 does not support DROP COLUMN
 
     conn.commit()
 
@@ -191,12 +191,11 @@ def upsert_listing(
     conn.execute(
         """
         INSERT INTO listings (
-            source, source_listing_id, normalized_address, address_raw, link, title,
+            source, source_listing_id, normalized_address, link, title,
             price, beds, baths, first_seen, last_seen, listing_date, description, canonical_listing_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         ON CONFLICT(source, source_listing_id) DO UPDATE SET
             normalized_address = excluded.normalized_address,
-            address_raw = excluded.address_raw,
             link = excluded.link,
             title = excluded.title,
             price = excluded.price,
@@ -210,7 +209,6 @@ def upsert_listing(
             source,
             source_listing_id,
             normalized_address or None,
-            address_raw or None,
             link,
             title,
             price,

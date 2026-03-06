@@ -13,7 +13,7 @@ def print_listings(db_path: str) -> None:
     try:
         rows = conn.execute(
             "SELECT id, source, source_listing_id, title, link, price, beds, baths, "
-            "address_raw, first_seen, last_seen FROM listings ORDER BY id"
+            "first_seen, last_seen FROM listings ORDER BY id"
         ).fetchall()
         if not rows:
             print("No listings in DB.")
@@ -34,7 +34,6 @@ def print_listings(db_path: str) -> None:
             print(f"  price:               {r['price']}")
             print(f"  beds:                {r['beds']}")
             print(f"  baths:               {r['baths']}")
-            print(f"  address_raw:         {r['address_raw']}")
             print(f"  first_seen:          {r['first_seen']}")
             print(f"  last_seen:           {r['last_seen']}")
             print()

@@ -144,14 +144,14 @@ def test_build_page_does_not_filter_by_location(tmp_path, env_vars):
                 "SELECT id, title FROM listings ORDER BY id"
             ).fetchall()
             assert len(rows) >= 2, "need at least 2 mock listings"
-            # Mark first as clearly non-Utah; second as clearly Utah
+            # Set distinct titles so we can assert both appear on the page
             conn.execute(
-                "UPDATE listings SET address_raw = ?, title = ? WHERE id = ?",
-                ("Boise, ID", "Non-Utah listing", rows[0]["id"]),
+                "UPDATE listings SET title = ? WHERE id = ?",
+                ("Non-Utah listing", rows[0]["id"]),
             )
             conn.execute(
-                "UPDATE listings SET address_raw = ?, title = ? WHERE id = ?",
-                ("Provo, UT", "Utah listing", rows[1]["id"]),
+                "UPDATE listings SET title = ? WHERE id = ?",
+                ("Utah listing", rows[1]["id"]),
             )
             conn.commit()
         finally:

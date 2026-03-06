@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .db import get_connection, update_listing_extraction
+from .db import get_connection, update_listing_extraction, update_run_status_after_llm
 from .extraction_regex import run_stage1
 
 
@@ -132,3 +132,84 @@ def run_regex_and_update(conn, listing_id: int, title: str, description: str) ->
     s1 = run_stage1(title, description or "")
     values = stage1_to_db_values(s1)
     update_listing_extraction(conn, listing_id, **values)
+
+
+def run_initiate_phase(db_path: str) -> int:
+    """
+    Run regex extraction on all listings that have description but no extraction yet.
+    Returns the number of listings processed.
+    """
+    conn = get_connection(db_path)
+    try:
+        rows = get_listings_needing_regex(conn)
+        for r in rows:
+            run_regex_and_update(
+                conn,
+                r["id"],
+                r["title"] or "",
+                r["description"] or "",
+            )
+        return len(rows)
+    finally:
+        conn.close()
+
+
+def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
+    """
+    Process the LLM queue until no listings have llm_extraction_status = 'pending'.
+    Calls Claude in batches, updates DB, updates run_status.llm_processed, builds HTML.
+    Returns total number of listings processed by Claude in this run.
+    """
+    from .build_page import build_page
+    from .extraction_claude import call_claude_batch, call_claude
+
+    total_processed = 0
+    while True:
+        conn = get_connection(db_path)
+        try:
+            rows = get_listings_pending_llm(conn, limit=batch_size, db_path=db_path)
+            if not rows:
+                break
+        finally:
+            conn.close()
+
+        batch = [
+            {
+                "title": r["title"] or "",
+                "description": r["description"] or "",
+                "stage1": row_to_stage1_prefill(r),
+            }
+            for r in rows
+        ]
+        try:
+            llm_results = call_claude_batch(batch)
+        except Exception:
+            llm_results = []
+            for item in batch:
+                try:
+                    out = call_claude(
+                        item["title"], item["description"], item["stage1"]
+                    )
+                    llm_results.append(out)
+                except Exception:
+                    llm_results.append({})
+        conn = get_connection(db_path)
+        try:
+            for row, llm_out in zip(rows, llm_results):
+                if llm_out:
+                    values = llm_result_to_db_values(llm_out)
+                    update_listing_extraction(conn, row["id"], **values)
+            count = sum(1 for o in llm_results if o)
+            total_processed += count
+        finally:
+            conn.close()
+
+        build_page()
+
+    if total_processed:
+        conn = get_connection(db_path)
+        try:
+            update_run_status_after_llm(conn, llm_processed=total_processed)
+        finally:
+            conn.close()
+    return total_processed

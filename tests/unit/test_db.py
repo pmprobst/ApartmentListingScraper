@@ -22,13 +22,12 @@ def test_init_schema_creates_listings_table(tmp_path):
             "PRAGMA table_info(listings)"
         )
         cols = {row[1] for row in cur.fetchall()}
-        # Core columns from reference.md plus LLM-derived fields
+        # Core columns plus extraction columns
         expected = {
             "id",
             "source",
             "source_listing_id",
             "normalized_address",
-            "address_raw",
             "link",
             "title",
             "price",
@@ -36,11 +35,15 @@ def test_init_schema_creates_listings_table(tmp_path):
             "baths",
             "first_seen",
             "last_seen",
-            "washer_dryer",
-            "renter_paid_fees",
-            "availability",
-            "pet_policy",
-            "roommates",
+            "listing_date",
+            "description",
+            "in_unit_washer_dryer",
+            "has_roommates",
+            "gender_preference",
+            "utilities_included",
+            "non_included_utilities_cost",
+            "lease_length",
+            "llm_extraction_status",
             "canonical_listing_id",
         }
         assert expected.issubset(cols)
@@ -68,9 +71,8 @@ def test_normalize_address_basic_cases():
 
 def _fetch_single_listing(conn: sqlite3.Connection):
     cur = conn.execute(
-        "SELECT source, source_listing_id, normalized_address, address_raw, link, "
-        "title, price, beds, baths, first_seen, last_seen, washer_dryer, "
-        "renter_paid_fees, availability, pet_policy, roommates "
+        "SELECT source, source_listing_id, normalized_address, link, "
+        "title, price, beds, baths, first_seen, last_seen "
         "FROM listings"
     )
     return cur.fetchone()
@@ -130,8 +132,9 @@ def test_upsert_listing_inserts_and_updates(tmp_path):
         conn.close()
 
 
-def test_llm_columns_present_and_nullable(tmp_path):
-    db_path = tmp_path / "llm_columns.db"
+def test_extraction_columns_nullable_after_upsert(tmp_path):
+    """After a plain upsert, extraction columns are not set (NULL)."""
+    db_path = tmp_path / "extraction_columns.db"
     conn = get_connection(str(db_path))
     try:
         upsert_listing(
@@ -142,13 +145,19 @@ def test_llm_columns_present_and_nullable(tmp_path):
             address_raw="1 Test St, Orem UT",
             title="Listing",
         )
-        row = _fetch_single_listing(conn)
+        row = conn.execute(
+            "SELECT in_unit_washer_dryer, has_roommates, gender_preference, "
+            "utilities_included, non_included_utilities_cost, lease_length, "
+            "llm_extraction_status FROM listings"
+        ).fetchone()
         assert row is not None
-        assert row["washer_dryer"] is None
-        assert row["renter_paid_fees"] is None
-        assert row["availability"] is None
-        assert row["pet_policy"] is None
-        assert row["roommates"] is None
+        assert row["in_unit_washer_dryer"] is None
+        assert row["has_roommates"] is None
+        assert row["gender_preference"] is None
+        assert row["utilities_included"] is None
+        assert row["non_included_utilities_cost"] is None
+        assert row["lease_length"] is None
+        assert row["llm_extraction_status"] is None
     finally:
         conn.close()
 
