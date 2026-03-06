@@ -113,7 +113,7 @@ def build_page() -> None:
             FROM listings
             WHERE last_seen >= ?
               AND (price IS NULL OR (price >= ? AND price <= ?))
-            ORDER BY last_seen DESC, id
+            ORDER BY CASE WHEN listing_date IS NULL THEN 1 ELSE 0 END, listing_date DESC, id
             """,
             (cutoff, price_min, price_max),
         ).fetchall()

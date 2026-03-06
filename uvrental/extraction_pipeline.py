@@ -1,7 +1,8 @@
 """
 DB-backed extraction pipeline: Stage 1 (regex) and Stage 2 (LLM) queue.
 
-Listings with description and llm_extraction_status IS NULL are candidates for regex.
+Listings with llm_extraction_status IS NULL and a non-empty description are
+candidates for regex (Stage 1). Rows with null/blank description are skipped.
 After regex, rows with _needs_llm get llm_extraction_status = 'pending'.
 Process script selects pending, calls Claude, writes results, sets 'done'.
 """
@@ -16,15 +17,15 @@ from .extraction_regex import run_stage1
 
 
 def get_listings_needing_regex(conn=None, db_path: str | None = None):
-    """Listings that have description but have not been through extraction yet."""
+    """Listings not yet extracted (llm_extraction_status IS NULL) with a non-empty description."""
     if conn is None:
         conn = get_connection(db_path or "listings.db")
     return conn.execute(
         """
         SELECT id, title, description, beds, baths
         FROM listings
-        WHERE description IS NOT NULL AND description != ''
-          AND llm_extraction_status IS NULL
+        WHERE llm_extraction_status IS NULL
+          AND description IS NOT NULL AND TRIM(description) != ''
         ORDER BY id
         """
     ).fetchall()
