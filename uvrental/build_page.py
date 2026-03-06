@@ -109,7 +109,13 @@ def build_page() -> None:
                 renter_paid_fees,
                 availability,
                 pet_policy,
-                roommates
+                roommates,
+                in_unit_washer_dryer,
+                has_roommates,
+                gender_preference,
+                utilities_included,
+                non_included_utilities_cost,
+                lease_length
             FROM listings
             WHERE last_seen >= ?
               AND (price IS NULL OR (price >= ? AND price <= ?))
@@ -172,6 +178,7 @@ def build_page() -> None:
             html_parts.append("      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>")
             html_parts.append("      <th>Address</th><th>Listing date</th>")
             html_parts.append("      <th>Washer/dryer</th><th>Pets</th><th>Availability</th><th>Roommates</th><th>Renter-paid</th>")
+            html_parts.append("      <th>In-unit W/D</th><th>Has roommates</th><th>Gender</th><th>Utilities</th><th>Util cost</th><th>Lease</th>")
             html_parts.append("    </tr></thead><tbody>")
             for r in rows:
                 title = (r["title"] or "No title").replace("<", "&lt;").replace(">", "&gt;")
@@ -205,6 +212,33 @@ def build_page() -> None:
                     f"        <td>{_escape_html(washer_dryer)}</td><td>{_escape_html(pet_policy)}</td>"
                     f"<td>{_escape_html(availability)}</td><td>{_escape_html(roommates)}</td>"
                     f"<td>{_escape_html(renter_paid_fees_display)}</td>"
+                )
+                # Extraction-plan columns (in_unit_washer_dryer, has_roommates, etc.)
+                # sqlite3.Row has no .get(); use key check and [] for optional columns.
+                keys = r.keys()
+                iuw = r["in_unit_washer_dryer"] if "in_unit_washer_dryer" in keys else None
+                in_unit_wd = "—" if iuw is None else ("Yes" if iuw else "No")
+                hrm = r["has_roommates"] if "has_roommates" in keys else None
+                has_rm = "—" if hrm is None else ("Yes" if hrm else "No")
+                def _cell(key):
+                    v = r[key] if key in keys else None
+                    return (str(v).strip() if v is not None and str(v).strip() else "—")
+
+                gender = _cell("gender_preference")
+                util_inc = _cell("utilities_included")
+                util_cost = _cell("non_included_utilities_cost")
+                lease = _cell("lease_length")
+                if gender != "—":
+                    gender = _escape_html(gender)
+                if util_inc != "—":
+                    util_inc = _escape_html(util_inc)
+                if util_cost != "—":
+                    util_cost = _escape_html(util_cost)
+                if lease != "—":
+                    lease = _escape_html(lease)
+                html_parts.append(
+                    f"        <td>{in_unit_wd}</td><td>{has_rm}</td><td>{gender}</td>"
+                    f"<td>{util_inc}</td><td>{util_cost}</td><td>{lease}</td>"
                 )
                 html_parts.append("      </tr>")
             html_parts.append("    </tbody></table>")

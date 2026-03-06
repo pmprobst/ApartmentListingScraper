@@ -144,6 +144,10 @@ def normalize_record(record: dict) -> dict:
     else:
         listing_date = None
 
+    description = (
+        str(record.get("seller_description") or record.get("description") or "")
+    ).strip() or None
+
     return {
         "source_listing_id": _source_listing_id(record),
         "link": link,
@@ -158,6 +162,7 @@ def normalize_record(record: dict) -> dict:
         "baths": _norm_num(record.get("baths") or record.get("bathrooms") or record.get("bath")),
         "address_raw": _address_raw(record),
         "listing_date": listing_date,
+        "description": description,
     }
 
 
@@ -233,6 +238,7 @@ def ingest_records(db_path: str, records: list[dict]) -> int:
                 baths=norm.get("baths"),
                 address_raw=norm.get("address_raw"),
                 listing_date=norm.get("listing_date"),
+                description=norm.get("description"),
             )
             processed += 1
         total_count = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]

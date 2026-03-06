@@ -29,7 +29,7 @@ DEFAULT_DATASET_ID = "gd_lvt9iwuh6fbcwmx1a"
 DEFAULT_KEYWORD = "Apartment"
 DEFAULT_CITY = "Provo, UT"
 DEFAULT_RADIUS_MILES = 20
-DEFAULT_LIMIT_PER_INPUT = 100
+DEFAULT_LIMIT_PER_INPUT = 10
 
 TRIGGER_BASE_URL = "https://api.brightdata.com/datasets/v3/trigger"
 

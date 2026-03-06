@@ -91,6 +91,14 @@ def init_schema(conn: sqlite3.Connection) -> None:
             pet_policy TEXT,
             roommates TEXT,
             listing_date TEXT,
+            description TEXT,
+            in_unit_washer_dryer INTEGER,
+            has_roommates INTEGER,
+            gender_preference TEXT,
+            utilities_included TEXT,
+            non_included_utilities_cost TEXT,
+            lease_length TEXT,
+            llm_extraction_status TEXT,
             canonical_listing_id INTEGER,
             UNIQUE(source, source_listing_id)
         )
@@ -131,6 +139,18 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
     if "listing_date" not in existing_cols:
         conn.execute("ALTER TABLE listings ADD COLUMN listing_date TEXT")
+    for col, ctype in [
+        ("description", "TEXT"),
+        ("in_unit_washer_dryer", "INTEGER"),
+        ("has_roommates", "INTEGER"),
+        ("gender_preference", "TEXT"),
+        ("utilities_included", "TEXT"),
+        ("non_included_utilities_cost", "TEXT"),
+        ("lease_length", "TEXT"),
+        ("llm_extraction_status", "TEXT"),
+    ]:
+        if col not in existing_cols:
+            conn.execute(f"ALTER TABLE listings ADD COLUMN {col} {ctype}")
 
     conn.commit()
 
@@ -152,6 +172,7 @@ def upsert_listing(
     beds: float | None = None,
     baths: float | None = None,
     listing_date: str | None = None,
+    description: str | None = None,
 ) -> None:
     """
     Insert or update one listing by (source, source_listing_id).
@@ -171,8 +192,8 @@ def upsert_listing(
         """
         INSERT INTO listings (
             source, source_listing_id, normalized_address, address_raw, link, title,
-            price, beds, baths, first_seen, last_seen, listing_date, canonical_listing_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            price, beds, baths, first_seen, last_seen, listing_date, description, canonical_listing_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         ON CONFLICT(source, source_listing_id) DO UPDATE SET
             normalized_address = excluded.normalized_address,
             address_raw = excluded.address_raw,
@@ -182,7 +203,8 @@ def upsert_listing(
             beds = excluded.beds,
             baths = excluded.baths,
             last_seen = excluded.last_seen,
-            listing_date = COALESCE(excluded.listing_date, listings.listing_date)
+            listing_date = COALESCE(excluded.listing_date, listings.listing_date),
+            description = COALESCE(excluded.description, listings.description)
     """,
         (
             source,
@@ -197,6 +219,7 @@ def upsert_listing(
             now,
             now,
             listing_date,
+            description,
         ),
     )
 
@@ -224,6 +247,60 @@ def upsert_listing(
                     "UPDATE listings SET canonical_listing_id = ? WHERE id = ?",
                     (other[0], our_id),
                 )
+    conn.commit()
+
+
+def update_listing_extraction(
+    conn: sqlite3.Connection,
+    listing_id: int,
+    *,
+    beds: float | None = None,
+    baths: float | None = None,
+    in_unit_washer_dryer: int | None = None,
+    has_roommates: int | None = None,
+    gender_preference: str | None = None,
+    utilities_included: str | None = None,
+    non_included_utilities_cost: str | None = None,
+    lease_length: str | None = None,
+    llm_extraction_status: str | None = None,
+) -> None:
+    """Update extraction fields and/or llm_extraction_status for one listing."""
+    updates = []
+    params: list[object] = []
+    if beds is not None:
+        updates.append("beds = ?")
+        params.append(beds)
+    if baths is not None:
+        updates.append("baths = ?")
+        params.append(baths)
+    if in_unit_washer_dryer is not None:
+        updates.append("in_unit_washer_dryer = ?")
+        params.append(in_unit_washer_dryer)
+    if has_roommates is not None:
+        updates.append("has_roommates = ?")
+        params.append(has_roommates)
+    if gender_preference is not None:
+        updates.append("gender_preference = ?")
+        params.append(gender_preference)
+    if utilities_included is not None:
+        updates.append("utilities_included = ?")
+        params.append(utilities_included)
+    if non_included_utilities_cost is not None:
+        updates.append("non_included_utilities_cost = ?")
+        params.append(non_included_utilities_cost)
+    if lease_length is not None:
+        updates.append("lease_length = ?")
+        params.append(lease_length)
+    if llm_extraction_status is not None:
+        updates.append("llm_extraction_status = ?")
+        params.append(llm_extraction_status)
+    if not updates:
+        return
+    params.append(listing_id)
+    conn.execute(
+        f"UPDATE listings SET {', '.join(updates)} WHERE id = ?",
+        params,
+    )
     conn.commit()
 
 

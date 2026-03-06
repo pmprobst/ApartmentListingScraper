@@ -12,3 +12,5 @@
 {"timestamp": "2026-03-05T23:33:22Z", "snapshot_id": "sd_mme3gkwe24aa933915", "status": "downloaded", "updated_ts": "2026-03-05T23:33:22Z"}
 {"timestamp": "2026-03-05T23:38:09Z", "snapshot_id": "sd_mme3w7li1z5y9k050f", "status": "initiated", "updated_ts": "2026-03-05T23:38:09Z"}
 {"timestamp": "2026-03-05T23:42:18Z", "snapshot_id": "sd_mme3w7li1z5y9k050f", "status": "downloaded", "updated_ts": "2026-03-05T23:42:18Z"}
+{"timestamp": "2026-03-06T03:59:18Z", "snapshot_id": "sd_mme3gkwe24aa933915", "status": "ingested", "updated_ts": "2026-03-06T03:59:18Z"}
+{"timestamp": "2026-03-06T03:59:18Z", "snapshot_id": "sd_mme3w7li1z5y9k050f", "status": "ingested", "updated_ts": "2026-03-06T03:59:18Z"}
