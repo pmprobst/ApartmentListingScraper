@@ -98,7 +98,7 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
 - **Availability / contract start** – When the unit is available or lease starts (date or “ASAP”, “March”, etc.).
 - **Pet policy** – Cats/dogs allowed, deposit, monthly pet rent, breed/weight limits.
 - **Parking** – Included, assigned, garage, street only, or extra cost.
-- **Lease length** – Month-to-month, 6 months, 12 months, or unspecified.
+- **Lease length** – Normalized to one of: `"summer"`, `"summer w/ option to review"`, `"fall/winter"`, or null if not confidently mappable. The webpage excludes summer-only (no renewal option) listings.
 - **Deposit** – Amount and whether refundable; any “last month” requirement.
 - **Application / admin fees** – One-time fees to apply or move in.
 - **Furnished vs unfurnished** – Fully furnished, partial, or unfurnished.

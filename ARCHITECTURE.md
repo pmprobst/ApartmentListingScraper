@@ -12,7 +12,7 @@ Fetch rental listings for Utah Valley from Facebook Marketplace via Bright Data,
    Uses `uvrental.brightdata.trigger_from_env()` with `BRIGHTDATA_API_KEY`. On success, appends `snapshot_id` and status `"initiated"` to `snapshot_history.jsonl` at the repo root.
 
 2. **Download snapshot** – `python scripts/scrape_download.py` [optional: `<snapshot_id>`]  
-   Uses `uvrental.brightdata_download.run_from_env()`. Reads latest pending snapshot from history, checks Bright Data progress; when status is `"ready"`, downloads JSON to `marketplace_snapshot_<snapshot_id>.json` and appends status `"downloaded"` to history.
+   Uses `uvrental.brightdata_download.run_from_env()`. Reads latest pending snapshot from history, checks Bright Data progress; when status is `"ready"`, downloads JSON to `snapshots/marketplace_snapshot_<snapshot_id>.json` and appends status `"downloaded"` to history.
 
 3. **Ingest + extraction + build** – `python main.py` (or `python scripts/run_pipeline.py`)  
    Uses `uvrental.pipeline.run_full_pipeline()`:
@@ -23,7 +23,8 @@ Fetch rental listings for Utah Valley from Facebook Marketplace via Bright Data,
 
 ## Storage
 
-- **Repo root (runtime):** `snapshot_history.jsonl` (append-only; statuses: initiated → running → downloaded → ingested), `marketplace_snapshot_<snapshot_id>.json`.
+- **Repo root (runtime):** `snapshot_history.jsonl` (append-only; statuses: initiated → running → downloaded → ingested).
+- **snapshots/:** `marketplace_snapshot_<snapshot_id>.json` (downloaded Bright Data payloads).
 - **Database:** `listings.db` (default), overridable via `LISTINGS_DB`.
 - **Output:** `docs/index.html` (default), overridable via `BUILD_PAGE_OUTPUT`.
 
@@ -50,7 +51,7 @@ Fetch rental listings for Utah Valley from Facebook Marketplace via Bright Data,
 
 ### uvrental.build_page
 
-- Reads listings (price filter, 30-day window, excludes female-only and has-roommates), reads run_status, writes HTML to output dir, updates run_status.displayed (does not change last_run_ts).
+- Reads listings (price filter, 30-day window; excludes female-only, has-roommates, and summer-only leases), reads run_status, writes HTML to output dir, updates run_status.displayed (does not change last_run_ts).
 
 ### uvrental.brightdata / uvrental.brightdata_download
 

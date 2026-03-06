@@ -27,10 +27,10 @@ Build the data pipeline: Bright Data Facebook Marketplace API → SQLite with de
   - Read `snapshot_history.jsonl`, find snapshots whose latest status is not `"downloaded"` or `"ingested"`.
   - For each, call the Bright Data **progress** and **snapshot** endpoints:
     - If not ready, record `"running"` and exit.
-    - If ready, download JSON to `marketplace_snapshot_<snapshot_id>.json` and record `"downloaded"`.
+    - If ready, download JSON to `snapshots/marketplace_snapshot_<snapshot_id>.json` and record `"downloaded"`.
 - Implement **`uvrental.ingest`** to:
   - Read DB path from env (`LISTINGS_DB`) or minimal config.
-  - Load downloaded `marketplace_snapshot_*.json` files and normalize each listing to the common schema (title, link, price, beds, baths, address_raw, source = `facebook_marketplace`, product_id or link hash for source_listing_id).
+  - Load downloaded `snapshots/marketplace_snapshot_*.json` files and normalize each listing to the common schema (title, link, price, beds, baths, address_raw, source = `facebook_marketplace`, product_id or link hash for source_listing_id).
   - Compute `normalized_address` for each listing and upsert into **listings** only (no run_status in this phase).
   - Update `snapshot_history.jsonl` with `"ingested"` status when a snapshot has been successfully ingested.
 - Handle API errors and timeouts in the scraper scripts; log failures.
@@ -51,7 +51,7 @@ Build the data pipeline: Bright Data Facebook Marketplace API → SQLite with de
 - [ ] **Upsert** ensures one row per (source, source_listing_id); first_seen and last_seen are set correctly; normalized_address is populated when address is available.
 - [ ] **Cross-source deduplication:** When the same normalized_address appears for a different source, rows are linked via canonical_listing_id (or merged) per reference.md.
 - [ ] **scrape.py** successfully triggers Bright Data (Facebook Marketplace) and records snapshot_ids in `snapshot_history.jsonl`.
-- [ ] **scrape_download.py** successfully checks progress and downloads ready snapshots to `marketplace_snapshot_*.json`, recording `"downloaded"` in history.
+- [ ] **scrape_download.py** successfully checks progress and downloads ready snapshots to `snapshots/marketplace_snapshot_*.json`, recording `"downloaded"` in history.
 - [ ] **ingest_records.py** successfully normalizes snapshot JSON and upserts into SQLite only.
 - [ ] **End-to-end** (scrape → download → ingest) runs locally and produces a populated SQLite DB with at least one listing.
 

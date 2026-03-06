@@ -36,15 +36,15 @@ Polish the generated webpage: show extracted fields, sorting/filtering, and run 
 
 - After the initial deployment, **beef up Claude extraction logic** for:
   - `non_included_utilities_cost` (compute and normalize a single monthly total when possible).
-  - `lease_length` (better handling of vague or relative date ranges).
-  These should be treated as a follow-up step once the core pipeline and page are stable.
+  - Other extraction refinements as needed.
+  **Current state:** `lease_length` is normalized to `"summer"`, `"summer w/ option to review"`, or `"fall/winter"` (null if unclear). The webpage excludes summer-only (no renewal option) listings.
 
 ---
 
 ## Requirements to pass before moving to Phase 5
 
 - [ ] **Extracted fields** are shown on the webpage for each listing (when available); missing data is handled without errors.
-- [ ] **Webpage shows only in-range listings:** Listings outside the configured price range are hidden (not shown); see [features.md](features.md).
+- [ ] **Webpage shows only in-range listings:** Listings outside the configured price range, or excluded (female-only, has-roommates, summer-only), are hidden (not shown); see [features.md](features.md).
 - [ ] **Run status** is visible on the page (last run time, success/failure, total count, N new, M updated).
 - [ ] **Sorting or filtering** is available (at least one of: sort by price, date, or filter by source/price). Prefer sort by date or price.
 - [ ] **GitHub Pages** is configured and the site updates automatically after each workflow run; no manual push needed.

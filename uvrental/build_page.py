@@ -123,7 +123,7 @@ def build_page() -> None:
             (cutoff, price_min, price_max),
             ).fetchall()
 
-            # Exclude listings that are female-only or have roommates
+            # Exclude listings that are female-only, have roommates, or summer-only (no renewal option)
             def _excluded(r):
                 keys = r.keys()
                 gender_val = r["gender_preference"] if "gender_preference" in keys else None
@@ -133,6 +133,9 @@ def build_page() -> None:
                 hrm = r["has_roommates"] if "has_roommates" in keys else None
                 if hrm is not None and hrm != 0:
                     return True
+                lease = (r["lease_length"] or "").strip()
+                if lease == "summer":
+                    return True  # summer-only without option to renew
                 return False
 
             rows = [r for r in rows if not _excluded(r)]
@@ -172,7 +175,7 @@ def build_page() -> None:
             html_parts.append("  <section class=\"listings\" aria-label=\"Listings\">")
             if not rows:
                 html_parts.append(
-                    "    <p>No listings in range (price, 30-day window, and exclude female-only / has-roommates).</p>"
+                    "    <p>No listings in range (price, 30-day window; excludes female-only, has-roommates, summer-only).</p>"
                 )
             else:
                 html_parts.append("    <table><thead><tr>")

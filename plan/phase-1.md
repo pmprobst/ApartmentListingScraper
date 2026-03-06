@@ -25,7 +25,7 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 
 - Implement `build_page.py` that:
   - Reads DB path, output path, and **price_max** / **price_min** (and optional 30-day cutoff) from env or minimal config.
-  - Opens the SQLite DB, reads **listings** that are **(a)** within the configured price range and **(b)** within the 30-day window (last_seen &gt;= cutoff), and **run_status**.
+  - Opens the SQLite DB, reads **listings** that are **(a)** within the configured price range, **(b)** within the 30-day window (last_seen &gt;= cutoff), and **(c)** not excluded (female-only, has-roommates, summer-only lease), and **run_status**.
   - Generates **static HTML** (and optional CSS/JS) that lists those listings (title, link, price, beds, baths, address, etc.) and displays the **run status** (last run time, success/failure, total count, N new, M updated, and optionally K removed per [features.md](features.md)).
   - Writes output to the configured directory (e.g. `docs/` for GitHub Pages).
 - Output must be static (no server-side logic) so GitHub Pages can serve it.
@@ -41,7 +41,7 @@ Add run status tracking, **price filter**, **30-day phased removal**, and webpag
 - [x] **run_status** is stored (SQLite table or file) and updated by ingest_records.py after each run (timestamp, success/failure, total count, N new, M updated; optionally K removed).
 - [x] **Price filter** is applied: build_page.py only includes listings within configured price_max (and optional price_min).
 - [x] **30-day phased removal** is implemented: listings with last_seen older than 30 days are excluded at read time (view-based); build_page shows only listings within the 30-day window (and price range). K removed in run_status is optional and not implemented.
-- [x] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list (filtered by price and 30-day window) and run status indicator.
+- [x] **build_page.py** reads SQLite (listings + run_status) and generates static HTML with listing list (filtered by price, 30-day window, and excludes female-only/has-roommates/summer-only) and run status indicator.
 - [x] **End-to-end** (fetch → build_page) runs locally and produces a valid HTML page with at least one listing and run status visible.
 
 When all checkboxes are satisfied, proceed to [phase-2.md](phase-2.md).

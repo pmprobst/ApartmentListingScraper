@@ -29,12 +29,12 @@ Do not commit `.env` or any file containing API keys. The `.env` file is gitigno
    Calls Bright Data and records a `snapshot_id` with status `"initiated"` in `snapshot_history.jsonl`.
 
 2. **Download snapshot JSON:** `python scripts/scrape_download.py`  
-   Polls Bright Data; when the snapshot is ready, saves `marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
+   Polls Bright Data; when the snapshot is ready, saves `snapshots/marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
 
 3. **Ingest, extract, and build page:** `python main.py`  
    Ingests all downloaded snapshots into the DB, runs regex + Claude extraction on listings with descriptions, and builds `docs/index.html`. You can also run `python scripts/run_pipeline.py` for the same pipeline (with project root on path).
 
-Output: `listings.db` and `docs/index.html` (by default). The HTML shows listings within the configured price range and 30-day window; female-only and has-roommates listings are excluded from the page.
+Output: `listings.db` and `docs/index.html` (by default). The HTML shows listings within the configured price range and 30-day window; female-only, has-roommates, and summer-only (no renewal option) listings are excluded from the page.
 
 ## Plan
 
