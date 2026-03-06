@@ -87,6 +87,7 @@ This document is the **source of truth** for what the Utah Valley Rental Skimmer
 
 - **Price filter:** The app applies a **configurable** price filter using at least **price_max** (and optionally **price_min**). Listings outside the configured range: **(a)** are not sent to the Claude API, and **(b)** must be **hidden from the webpage** (not shown at all). Only listings within the price range are shown on the page.
 - **Claude API only on new, in-range listings:** The LLM extraction step runs **only** on listings that are **(a)** new this run and **(b)** within the configured price (and any other configured filters). Extraction must **not** be re-run on every listing on every run; only newly fetched listings that pass the filter get extracted; results are stored in SQLite (e.g. `extracted` column).
+  The extraction logic may also use **price and bedroom count together as a heuristic** to infer roommate situations (for example, a 2+ bedroom listing under a configurable per-person price threshold is likely shared housing).
 - **Prototype first:** The Claude extraction step must be **prototyped and validated in isolation** (Phase 2) before being wired into the main pipeline.
 
 ### Claude extraction schema (fields to extract)

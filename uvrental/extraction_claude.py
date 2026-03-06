@@ -35,8 +35,11 @@ Field definitions:
   shared, coin-op, on-site building laundry, or in a separate laundry room shared with other units.
   null if not mentioned.
 - has_roommates: true if the tenant will be living with other people (shared room, joining roommates,
-  multi-person apartment). false if the listing is for an entire unit with no other occupants.
-  null if genuinely unclear.
+  multi-person apartment). Also true for BYU/UVU "contract sales" where someone is selling their
+  spot in an existing shared apartment, or when language implies other tenants (e.g. "sharing with",
+  "people in my apartment", "tenants total", "spots available", "move here with a buddy").
+  false if the listing is for an entire unit with no other occupants (e.g. "no roommates",
+  "whole place to yourself"). null if genuinely unclear.
 - gender_preference: "male", "female", or "any". Use "any" if no gender is mentioned.
 - utilities_included: a list of specific utilities included in rent (e.g. ["water","trash"]),
   the string "all" if all utilities are included, or null if utilities are not included.

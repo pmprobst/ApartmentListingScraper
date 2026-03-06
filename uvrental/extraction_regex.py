@@ -7,9 +7,17 @@ See plan/extraction_plan.md for pattern rationale and data observations.
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Optional
 
+
+try:
+    ROOMMATE_PRICE_THRESHOLD = float(
+        os.environ.get("ROOMMATE_PRICE_THRESHOLD", "600")
+    )
+except (TypeError, ValueError):
+    ROOMMATE_PRICE_THRESHOLD = 600.0
 
 def extract_bedrooms(text: str) -> Optional[int]:
     """
@@ -222,15 +230,27 @@ def extract_has_roommates(text: str) -> Optional[bool]:
         r"\bentire\s+unit\b",
         r"\bwhole\s+unit\b",
         r"\bprivate\s+(?:entrance|basement\s+suite)\b",
+        r"\bno\s+roommates?\b",
     ]
     has_roommates_patterns = [
         r"\bshared\s+room\b",
+        r"\bshare\s+room\b",
+        r"\bshared\s+(?:female|male|bedroom|bedrooms|apartment)\b",
         r"\b\d+\s+(?:existing\s+)?roommates?\b",
         r"\b\d+\s+(?:great\s+|clean\s+|fun\s+)?roommates?\s+staying\b",
         r"\b(?:two|three|four|five|six)\s+(?:other\s+)?roommates?\b",
         r"\b\d+\s*(?:person|people|man|guys?|girls?|women|men)\s+apartment\b",
         r"\b(?:other\s+)?roommates?\s+(?:are\s+)?(?:very|super|so\s+)?(?:great|sweet|fun|clean|amazing|chill)\b",
         r"\bjoining\b.*\broommates?\b",
+        r"\bsharing\s+with\s+(?:a\s+few\s+)?\w+",
+        r"\b\d+\s+tenants?\s+total\b",
+        r"\b\d+\s+(?:spots?|spaces?|openings?)\s+available\b",
+        r"\bsplit\s+between\s+\d+\s+roommates?\b",
+        r"\broommate\s+matching\b",
+        r"\bselling\s+(?:my|a|one|their)\s+(?:spot|contract)\b",
+        r"\bsubleasing\s+(?:my|a)\s+contract\b",
+        r"\bpeople\s+in\s+(?:my|the|this)\s+apartment\b",
+        r"\bmove\s+(?:here\s+)?with\s+a\s+(?:buddy|friend)\b",
     ]
     lower = text.lower()
     for p in whole_unit_patterns:
@@ -242,7 +262,7 @@ def extract_has_roommates(text: str) -> Optional[bool]:
     return None
 
 
-def run_stage1(title: str, description: str) -> dict:
+def run_stage1(title: str, description: str, price: float | None = None) -> dict:
     """
     Run regex extraction on title + description.
     Returns dict with extraction fields and _needs_llm flag.
@@ -255,6 +275,14 @@ def run_stage1(title: str, description: str) -> dict:
     roommates = extract_has_roommates(combined)
     utilities_inc, util_cost = extract_utilities(combined)
     lease = extract_lease_length(combined)
+
+    if roommates is None and beds is not None and price is not None:
+        try:
+            p_val = float(price)
+        except (TypeError, ValueError):
+            p_val = None
+        if p_val is not None and beds >= 2 and p_val < ROOMMATE_PRICE_THRESHOLD:
+            roommates = True
 
     return {
         "bedrooms": beds,

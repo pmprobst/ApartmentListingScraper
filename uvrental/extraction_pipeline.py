@@ -25,7 +25,7 @@ def get_listings_needing_regex(conn=None, db_path: str | None = None):
         conn = get_connection(db_path or "listings.db")
     return conn.execute(
         """
-        SELECT id, title, description, beds, baths
+        SELECT id, title, description, beds, baths, price
         FROM listings
         WHERE llm_extraction_status IS NULL
           AND description IS NOT NULL AND TRIM(description) != ''
@@ -131,9 +131,11 @@ def llm_result_to_db_values(llm_out: dict) -> dict[str, Any]:
     }
 
 
-def run_regex_and_update(conn, listing_id: int, title: str, description: str) -> None:
+def run_regex_and_update(
+    conn, listing_id: int, title: str, description: str, price: float | None = None
+) -> None:
     """Run Stage 1 on one listing and write results to DB."""
-    s1 = run_stage1(title, description or "")
+    s1 = run_stage1(title, description or "", price=price)
     values = stage1_to_db_values(s1)
     update_listing_extraction(conn, listing_id, **values)
 
@@ -153,6 +155,7 @@ def run_initiate_phase(db_path: str) -> int:
                 r["id"],
                 r["title"] or "",
                 r["description"] or "",
+                r["price"],
             )
         return len(rows)
     finally:
