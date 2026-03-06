@@ -30,8 +30,9 @@ log = logging.getLogger(__name__)
 LISTINGS_DB = "LISTINGS_DB"
 DEFAULT_DB = "listings.db"
 
-# Snapshot history lives at the project root alongside the package.
-SNAPSHOT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "snapshot_history.jsonl"
+# Snapshot history and snapshot JSONs live at the project root.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SNAPSHOT_HISTORY_PATH = PROJECT_ROOT / "snapshot_history.jsonl"
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -369,8 +370,9 @@ def ingest_all_downloaded_from_history(
         ]
 
     total_ingested = 0
+    snapshots_dir = PROJECT_ROOT / "snapshots"
     for sid in snapshot_ids:
-        snapshot_path = Path(__file__).resolve().parents[1] / f"marketplace_snapshot_{sid}.json"
+        snapshot_path = snapshots_dir / f"marketplace_snapshot_{sid}.json"
         if not snapshot_path.exists():
             log.warning(
                 "Snapshot file %s for id %s not found; skipping.", snapshot_path, sid

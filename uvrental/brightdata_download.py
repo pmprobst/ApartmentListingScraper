@@ -25,7 +25,8 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
-SNAPSHOT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "snapshot_history.jsonl"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SNAPSHOT_HISTORY_PATH = PROJECT_ROOT / "snapshot_history.jsonl"
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
 SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
 REQUEST_TIMEOUT_SEC = 60
@@ -144,8 +145,9 @@ def download_snapshot(api_key: str, snapshot_id: str) -> Tuple[Path, int]:
     except json.JSONDecodeError as e:
         log.error("Bright Data download invalid JSON for %s: %s", snapshot_id, e)
         raise
-
-    out_path = Path(__file__).resolve().parents[1] / f"marketplace_snapshot_{snapshot_id}.json"
+    snapshots_dir = PROJECT_ROOT / "snapshots"
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
+    out_path = snapshots_dir / f"marketplace_snapshot_{snapshot_id}.json"
     with out_path.open("w") as f:
         json.dump(payload, f, indent=2)
 

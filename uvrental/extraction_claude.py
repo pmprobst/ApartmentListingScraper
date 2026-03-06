@@ -40,9 +40,11 @@ Field definitions:
 - gender_preference: "male", "female", or "any". Use "any" if no gender is mentioned.
 - utilities_included: a list of specific utilities included in rent (e.g. ["water","trash"]),
   the string "all" if all utilities are included, or null if utilities are not included.
-- non_included_utilities_cost: a concise string describing the estimated monthly cost of utilities
-  the tenant must pay (e.g. "$50-70/month", "~$70/month", "gas + electric varies"). null if
-  utilities are included or no cost estimate is given.
+- non_included_utilities_cost: a concise string giving a single estimated total monthly cost
+  for all utilities the tenant must pay that are not included in rent. If multiple fees or per-utility
+  amounts are mentioned, convert them into one approximate monthly total (e.g. "$120/month" or
+  "$80-100/month") rather than listing separate items. null if utilities are included or no cost
+  estimate is given.
 - lease_length: a string describing the lease term (e.g. "spring/summer 2026", "August 2026-2027",
   "month-to-month", "through August 14, 2026"). null if not mentioned.
 
