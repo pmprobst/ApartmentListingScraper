@@ -54,7 +54,9 @@ def _append_history(snapshot_id: str, status: str) -> None:
 
 def latest_pending_snapshot_id() -> str:
     """
-    Return the latest snapshot_id whose most recent status is not 'downloaded'.
+    Return the latest snapshot_id whose most recent status is still pending
+    (i.e. not 'downloaded' or 'ingested').
+
     Raises FileNotFoundError if history file is missing; ValueError if no valid snapshot_id.
     """
     if not SNAPSHOT_HISTORY_PATH.exists():
@@ -72,7 +74,7 @@ def latest_pending_snapshot_id() -> str:
             continue
         seen_ids.add(sid)
         status = (rec.get("status") or "").lower()
-        if status == "downloaded":
+        if status in {"downloaded", "ingested"}:
             continue
         return sid
     raise ValueError(f"No valid snapshot_id entries found in {SNAPSHOT_HISTORY_PATH}")
