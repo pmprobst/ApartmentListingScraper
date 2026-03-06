@@ -388,10 +388,11 @@ def update_run_status_after_llm(
 ) -> None:
     """
     Update run_status after the Claude/LLM extraction step.
+    Does not update last_run_ts (that reflects the last ingest only).
     """
-    now = _now_iso()
     row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
     if row is None:
+        now = _now_iso()
         conn.execute(
             """
             INSERT INTO run_status (
@@ -407,12 +408,8 @@ def update_run_status_after_llm(
         )
     else:
         conn.execute(
-            """
-            UPDATE run_status
-            SET last_run_ts = ?, llm_processed = ?
-            WHERE id = 1
-            """,
-            (now, int(llm_processed)),
+            "UPDATE run_status SET llm_processed = ? WHERE id = 1",
+            (int(llm_processed),),
         )
     conn.commit()
 
@@ -424,10 +421,11 @@ def update_run_status_after_build_page(
 ) -> None:
     """
     Update run_status after build_page has rendered the HTML.
+    Does not update last_run_ts (that reflects the last ingest only).
     """
-    now = _now_iso()
     row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
     if row is None:
+        now = _now_iso()
         conn.execute(
             """
             INSERT INTO run_status (
@@ -443,12 +441,8 @@ def update_run_status_after_build_page(
         )
     else:
         conn.execute(
-            """
-            UPDATE run_status
-            SET last_run_ts = ?, displayed = ?
-            WHERE id = 1
-            """,
-            (now, int(displayed)),
+            "UPDATE run_status SET displayed = ? WHERE id = 1",
+            (int(displayed),),
         )
     conn.commit()
 

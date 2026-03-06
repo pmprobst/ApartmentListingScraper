@@ -1,523 +1,75 @@
-## Architecture Overview
+# Architecture
 
-This document describes the **current** state of the Utah Valley Rental Skimmer project: components, data flow, and how the files work together. It is a snapshot of the implementation, not the long‑term roadmap (which lives in `plan/`).
+This document describes the current Utah Valley Rental Skimmer: components, data flow, and how the files work together.
 
-### High‑level goal
+## High-level goal
 
-- Periodically fetch rental listings for Utah Valley from **Facebook Marketplace via Bright Data**, store them in **SQLite**, and eventually:
-  - Enrich new in‑range listings with a Claude API extraction step.
-  - Render a static HTML page (served via GitHub Pages) with a run‑status indicator.
+Fetch rental listings for Utah Valley from Facebook Marketplace via Bright Data, store them in SQLite, enrich with Claude extraction (regex + LLM), and publish a static HTML page (e.g. GitHub Pages).
 
-The implementation today covers:
+## Data flow
 
-- **Phase 0**: Bright Data snapshots → SQLite (schema, deduplication).
-- **Phase 1**: Run‑status tracking and a static HTML page with filters.
+1. **Trigger snapshot** – `python scripts/scrape.py`  
+   Uses `uvrental.brightdata.trigger_from_env()` with `BRIGHTDATA_API_KEY`. On success, appends `snapshot_id` and status `"initiated"` to `snapshot_history.jsonl` at the repo root.
 
-Code is split into:
+2. **Download snapshot** – `python scripts/scrape_download.py` [optional: `<snapshot_id>`]  
+   Uses `uvrental.brightdata_download.run_from_env()`. Reads latest pending snapshot from history, checks Bright Data progress; when status is `"ready"`, downloads JSON to `marketplace_snapshot_<snapshot_id>.json` and appends status `"downloaded"` to history.
 
-- A core library package: `uvrental/`
-- CLI entrypoints: `scripts/`
+3. **Ingest + extraction + build** – `python main.py` (or `python scripts/run_pipeline.py`)  
+   Uses `uvrental.pipeline.run_full_pipeline()`:
+   - Ingest: reads `snapshot_history.jsonl`, ingests all snapshots with status `"downloaded"` into the DB, appends `"ingested"`.
+   - Build page (first pass).
+   - Extraction: regex on listings with non-empty description and `llm_extraction_status IS NULL`; rows that need more get `llm_extraction_status = 'pending'`; then Claude processes the pending queue until empty.
+   - Build page (final).
 
-**Doc map:** Long‑term plan and requirements live in **plan/**: [plan/plan.md](plan/plan.md) (overview), [plan/features.md](plan/features.md) (requirements), [plan/reference.md](plan/reference.md) (schema, config, sources), and [plan/phase-*.md](plan/phase-0.md) (steps and checklists).
+## Storage
 
----
+- **Repo root (runtime):** `snapshot_history.jsonl` (append-only; statuses: initiated → running → downloaded → ingested), `marketplace_snapshot_<snapshot_id>.json`.
+- **Database:** `listings.db` (default), overridable via `LISTINGS_DB`.
+- **Output:** `docs/index.html` (default), overridable via `BUILD_PAGE_OUTPUT`.
 
-## Data flow overview
+## Core modules
 
-### End‑to‑end pipeline
+### uvrental.db
 
-1. **Trigger a Bright Data snapshot**
-   - CLI: `python scripts/scrape.py`
-   - Uses `uvrental.brightdata.trigger_from_env()` with `BRIGHTDATA_API_KEY` and related env vars.
-   - On success:
-     - Receives a `snapshot_id` from Bright Data.
-     - Appends a record to `snapshot_history.jsonl` at the repo root with:
-       - `snapshot_id`
-       - `status: "initiated"`
-       - timestamps.
+- **listings table:** id, source, source_listing_id, normalized_address, link, title, price, beds, baths, first_seen, last_seen, listing_date, description, in_unit_washer_dryer, has_roommates, gender_preference, utilities_included, non_included_utilities_cost, lease_length, llm_extraction_status, canonical_listing_id. `UNIQUE(source, source_listing_id)`.
+- **run_status table:** Single row (id=1): last_run_ts, success, scraped, thrown, duplicate, added, total_count, new_count, updated_count, llm_processed, displayed. **last_run_ts and success** are set only by the ingest step (Bright Data download → ingest); LLM and build_page update only llm_processed and displayed.
+- **Functions:** normalize_address, get_connection, init_schema, upsert_listing, update_run_status_after_fetch, update_run_status_after_llm, update_run_status_after_build_page, update_listing_extraction, get_run_status.
 
-2. **Check snapshot status and download JSON**
-   - CLI: `python scripts/scrape_download.py`  
-     or `python scripts/scrape_download.py <snapshot_id>`
-   - Uses `uvrental.brightdata_download.run_from_env()`.
-   - Behavior:
-     - If no `snapshot_id` arg is passed:
-       - Scans `snapshot_history.jsonl` from the end to find the latest snapshot whose most recent status is **not** `"downloaded"`.
-       - Uses that `snapshot_id`.
-     - Calls Bright Data’s `progress` endpoint:
-       - If status is **not** `"ready"`:
-         - Appends a `"running"` entry for that `snapshot_id` in `snapshot_history.jsonl`.
-         - Exits (no download).
-       - If status is `"ready"`:
-         - Calls Bright Data’s `snapshot` endpoint and writes the payload to:
-           - `marketplace_snapshot_<snapshot_id>.json` (currently in the **repo root**).
-         - Counts records (handles both top‑level lists and common object‑with‑array shapes).
-         - Appends a `"downloaded"` entry for that `snapshot_id` in `snapshot_history.jsonl`.
+### uvrental.ingest
 
-3. **Ingest downloaded snapshots into SQLite and build the static page**
-   - CLI: `python scripts/run_pipeline.py`
-   - Uses `uvrental.pipeline.run_pipeline()`:
-     1. Resolves the DB path from `LISTINGS_DB` (default: `listings.db`).
-     2. Calls `uvrental.ingest.ingest_all_downloaded_from_history(db_path)`:
-        - Reads `snapshot_history.jsonl` to find snapshot_ids whose latest status is `"downloaded"`.
-        - For each such id:
-          - Ingests `marketplace_snapshot_<snapshot_id>.json` into the DB.
-          - Appends an `"ingested"` entry for that id to `snapshot_history.jsonl`.
-        - Updates `run_status` with ingest metrics.
-     3. Prints a human‑readable listing summary from the `listings` table.
-     4. Calls `uvrental.build_page.build_page()`:
-        - Applies price and time filters.
-        - Deletes clearly non‑Utah rows.
-        - Renders `docs/index.html` with a run‑status block and listing cards.
-        - Updates `run_status.displayed` with the number of listings rendered.
+- Reads Bright Data snapshot JSON, normalizes records, upserts into listings, updates run_status (via update_run_status_after_fetch). Manages snapshot_history (downloaded → ingested). When zero snapshots are ingested, still updates run_status so last run is recorded.
 
-### Storage layout
+### uvrental.extraction_pipeline
 
-- **Runtime files at repo root** (not committed, but expected to persist between runs):
-  - `snapshot_history.jsonl` – append‑only log of snapshot lifecycle events:
-    - `status` values progress through `"initiated" → "running" → "downloaded" → "ingested"`.
-  - `marketplace_snapshot_<snapshot_id>.json` – Bright Data snapshot payloads for each run.
-    - In a future phase, these may move into a dedicated directory, e.g. `snapshots/`, controlled by a `SNAPSHOT_DIR` env var.
+- Stage 1 (regex): listings with description and llm_extraction_status IS NULL; writes extraction columns and sets llm_extraction_status to `'pending'` or `'done'`.
+- Stage 2 (Claude): processes rows with llm_extraction_status = 'pending' in batches, writes results, sets 'done'. Updates run_status.llm_processed (does not change last_run_ts).
 
-- **Database**:
-  - Default: `listings.db` at the repo root.
-  - Overridable via `LISTINGS_DB` env var.
+### uvrental.extraction_claude
 
-- **Static HTML**:
-  - `docs/index.html` – generated by `uvrental.build_page.build_page()`; suitable for GitHub Pages.
+- Calls Anthropic API for single or batch extraction; uses title, description, and regex prefill.
 
----
+### uvrental.build_page
 
-## Core library modules (`uvrental/*`)
+- Reads listings (price filter, 30-day window, excludes female-only and has-roommates), reads run_status, writes HTML to output dir, updates run_status.displayed (does not change last_run_ts).
 
-### `uvrental.db` – SQLite schema, deduplication, and run status
+### uvrental.brightdata / uvrental.brightdata_download
 
-**Tables:**
+- Trigger and download Bright Data snapshots; read/write snapshot_history and snapshot JSON files.
 
-- `listings`:
-  - `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
-  - `source`, `source_listing_id`
-  - `normalized_address`, `address_raw`
-  - `link`, `title`, `price`, `beds`, `baths`
-  - `first_seen`, `last_seen` (ISO‑8601 UTC)
-  - `extracted` (JSON/text, nullable)
-  - `canonical_listing_id` (links to another row for cross‑source deduplication)
-  - `UNIQUE(source, source_listing_id)` – enforces one row per listing per source.
+## Scripts
 
-- `run_status`:
-  - Single row (id = 1) with:
-    - `last_run_ts`, `success`
-    - `scraped`, `thrown`, `duplicate`, `added`, `total_count`
-    - `new_count`, `updated_count`
-    - `llm_processed`, `displayed`
+- `scripts/scrape.py` – trigger snapshot (calls uvrental.brightdata.trigger_from_env).
+- `scripts/scrape_download.py` – check status and download when ready (calls uvrental.brightdata_download.run_from_env).
+- `main.py` – full pipeline (calls uvrental.pipeline.run_full_pipeline).
+- `scripts/run_pipeline.py` – same as main.py (adds project root to path, then run_full_pipeline).
 
-**Functions:**
+## Environment variables
 
-- `normalize_address(raw)`:
-  - Normalizes addresses for deduplication:
-    - Lowercase → remove punctuation → collapse whitespace → standardize suffixes (`st` → `street`, `ave` → `avenue`, etc.).
+- **BRIGHTDATA_API_KEY** – required for scrape and scrape_download.
+- **ANTHROPIC_API_KEY** – required for full pipeline (Claude extraction).
+- **LISTINGS_DB** – optional; default `listings.db`.
+- **BUILD_PAGE_OUTPUT** – optional; default `docs`.
+- **PRICE_MIN** / **PRICE_MAX** – optional; default 0 / 2000 (filter for HTML).
+- **CLAUDE_MODEL** – optional; default `claude-sonnet-4-20250514`.
 
-- `get_connection(db_path)` / `init_schema(conn)`:
-  - Open/create the SQLite DB and ensure both tables are present.
-
-- `upsert_listing(conn, *, source, source_listing_id, link, ..., extracted=None)`:
-  - Insert or update by `(source, source_listing_id)`:
-    - Computes `normalized_address` from `address_raw` if not provided.
-    - On insert:
-      - Sets `first_seen = last_seen = now`.
-    - On update:
-      - Updates fields and `last_seen`, but preserves `first_seen`.
-    - Serializes non‑string `extracted` values to JSON; uses `COALESCE` so `None` never deletes existing extraction data.
-  - Cross‑source dedup:
-    - After insert/update, if `normalized_address` is non‑blank:
-      - Looks for another row with the same `normalized_address` but a different `source`.
-      - If found, sets the current row’s `canonical_listing_id` to that row’s `id`.
-
-- `update_run_status_after_fetch(conn, *, success, scraped, thrown, duplicate, added, total_count)`:
-  - Upserts the single `run_status` row:
-    - Computes `new_count = added`, `updated_count = duplicate`.
-    - Preserves existing `llm_processed` and `displayed`.
-
-- `update_run_status_after_llm(conn, *, llm_processed)`:
-  - Ensures a `run_status` row exists; updates `last_run_ts` and `llm_processed`.
-
-- `update_run_status_after_build_page(conn, *, displayed)`:
-  - Ensures a `run_status` row exists; updates `last_run_ts` and `displayed`.
-
-- `get_run_status(conn)`:
-  - Returns the `run_status` row (`id = 1`) or `None`.
-
-**Contract:** All ingestion and page‑build code should use these helpers rather than modifying tables directly.
-
----
-
-### `uvrental.ingest` – Bright Data snapshots → SQLite (Phase 0 pipeline)
-
-`uvrental.ingest` is responsible for:
-
-- Interpreting Bright Data snapshot JSON into a normalized internal listing shape.
-- Inserting/updating rows in `listings`.
-- Updating `run_status` with ingest metrics.
-- Managing `"downloaded"` → `"ingested"` transitions in `snapshot_history.jsonl`.
-
-**Environment and defaults:**
-
-- Uses `python-dotenv` to load `.env`.
-- Reads:
-  - `LISTINGS_DB` (default: `listings.db`).
-
-**Normalization helpers:**
-
-- `_source_listing_id(record)`:
-  - Prefers `product_id`, `listing_id`, `id`, `listingID`.
-  - Falls back to a 32‑character SHA‑256 hash of `link`/`url`/`listing_url` (or of `title`).
-
-- `_numeric_listing_id(record)`:
-  - Attempts to find a numeric Marketplace id from id‑like fields or from URLs (e.g. `/marketplace/item/{id}`).
-
-- `_norm_price(val)` / `_norm_num(val)`:
-  - Normalize currency and generic numeric fields to floats (or `None`).
-
-- `_address_raw(record)`:
-  - Collapses various address shapes into a single string:
-    - String `location` → use as‑is (trimmed).
-    - Dict `location` → joins `city`, `state`, `address`, `street`, `region`.
-    - Fallback to `address`, `address_raw`, `city`, `location_name`.
-
-- `normalize_record(record)`:
-  - Produces a dict with:
-    - `source_listing_id`
-    - `link`:
-      - Canonical `https://www.facebook.com/marketplace/item/{id}/` when `_numeric_listing_id` succeeds.
-      - Else, a best‑effort URL from `link` / `url` / `listing_url` / `listing_link` (prefixed with marketplace base if needed).
-    - `title`, `price`, `beds`, `baths`, `address_raw` using the helpers above.
-
-**Snapshot loading and ingestion:**
-
-- `_load_snapshot_payload(payload)`:
-  - Accepts either:
-    - List of dicts, or
-    - Dict with a list under `data` / `results` / `listings` / `items` / `records`.
-  - Always returns a list of dicts.
-
-- `load_snapshot_file(path)`:
-  - Reads `marketplace_snapshot_*.json`, parses JSON, normalizes the shape via `_load_snapshot_payload`, logs the number of records, and returns a list of records.
-
-- `ingest_records(db_path, records)`:
-  - Opens the DB via `uvrental.db.get_connection(db_path)`.
-  - Metrics:
-    - `scraped` = `len(records)`
-    - `thrown` = records skipped due to:
-      - Non‑dict values,
-      - Presence of `error` or `error_code`,
-      - Missing or root‑only Marketplace links.
-    - `duplicate` / `added` counters based on `(source="facebook_marketplace", source_listing_id)`.
-  - For each valid record:
-    - Normalizes via `normalize_record`.
-    - Calls `upsert_listing` with source `"facebook_marketplace"`.
-  - After ingestion:
-    - Computes `total_count = COUNT(*) FROM listings`.
-    - Calls `update_run_status_after_fetch` with computed metrics.
-
-- `ingest_snapshot_file(db_path, snapshot_path)`:
-  - Convenience wrapper around `load_snapshot_file` + `ingest_records`.
-
-- `_append_history(snapshot_id, status)` / `_latest_snapshot_states()`:
-  - Maintain `snapshot_history.jsonl` at the repo root, ensuring the most recent status per `snapshot_id` can be determined.
-
-- `ingest_all_downloaded_from_history(db_path: str | None = None, snapshot_id: str | None = None)`:
-  - Determines which snapshots to ingest:
-    - When `snapshot_id` is provided:
-      - Ingests only that id if its latest status is `"downloaded"`.
-    - Otherwise:
-      - Ingests all snapshot_ids whose latest status is `"downloaded"`.
-  - For each id:
-    - Looks for `marketplace_snapshot_<snapshot_id>.json` at the repo root.
-    - Ingests it via `ingest_snapshot_file`.
-    - Appends `"ingested"` to `snapshot_history.jsonl`.
-  - Returns the total number of ingested records.
-
-- `MOCK_RECORDS` and `run_fetch_dry_run(db_path)`:
-  - Provide a deterministic, API‑free Phase‑0 check that inserts a small set of mock listings into the DB.
-
----
-
-### `uvrental.build_page` – static HTML generation (Phase 1)
-
-`uvrental.build_page` reads the DB and `run_status`, filters rows, and generates `docs/index.html`.
-
-**Environment and defaults:**
-
-- `LISTINGS_DB` (default: `listings.db`)
-- `BUILD_PAGE_OUTPUT` (default: `docs`)
-- `PRICE_MIN` (default: 0), `PRICE_MAX` (default: 2000)
-
-**Key helpers:**
-
-- `_thirty_days_ago_iso()`:
-  - Computes `now - 30 days` in UTC as an ISO string; used as the `last_seen` cutoff.
-
-- `_format_run_ts(iso_ts)`:
-  - Converts an ISO string to a human‑readable `YYYY-MM-DD HH:MM UTC` string.
-
-**`build_page()` flow:**
-
-1. Resolve `db_path` and `output_dir` from env.
-2. Parse `price_min` / `price_max` from env.
-3. Compute the 30‑day cutoff.
-4. Open the DB via `get_connection`.
-5. Query:
-   - `last_seen >= cutoff`
-   - `price IS NULL` **or** `PRICE_MIN <= price <= PRICE_MAX`
-6. Read `run_status` via `get_run_status`.
-7. Render an HTML document with:
-   - A “Run status” section summarizing:
-     - Last run time, success/failure
-     - `scraped`, `thrown`, `duplicate`, `added`, `total_count`, `new_count`, `updated_count`, `llm_processed`, `displayed`
-   - A “Listings” section that:
-     - Shows a list of `<li>` entries with:
-       - `<a>` to the canonical Marketplace URL.
-       - Price (or `—` if missing), beds/baths (or `—`), and the address.
-8. Write `index.html` under `output_dir` (by default `docs/index.html`).
-9. Call `update_run_status_after_build_page(conn, displayed=len(rows))`.
-
-**30‑day phased removal (view‑based):**
-
-- Listings with `last_seen` older than 30 days are **excluded from the page** but not deleted solely for age; actual row deletion for old listings is deferred or handled separately.
-
----
-
-### `uvrental.brightdata` – trigger snapshots and log history
-
-`uvrental.brightdata` encapsulates the Bright Data dataset **trigger** behavior.
-
-- `SNAPSHOT_HISTORY_PATH`:
-  - Points at `snapshot_history.jsonl` at the repo root.
-
-- `_env(key, default)`:
-  - Reads and strips env values (used for API key and defaults).
-
-- `build_trigger_url(dataset_id, limit_per_input)`:
-  - Constructs the full trigger URL for the dataset API.
-
-- `trigger_snapshot(api_key, *, dataset_id, keyword, city, radius_miles, limit_per_input, timeout_sec=60) -> dict`:
-  - Performs a `POST` to Bright Data with a single input:
-    - `{"keyword": <keyword>, "city": <city>, "radius": <radius_miles>, "date_listed": ""}`
-  - Returns the parsed JSON response; raises for non‑2xx with a helpful error.
-
-- `extract_snapshot_id(response) -> str | None`:
-  - Returns `response["snapshot_id"]` or `response["snapshot_ID"]` if present.
-
-- `record_snapshot_history(snapshot_id, status="initiated")`:
-  - Appends `{timestamp, snapshot_id, status, updated_ts}` to `snapshot_history.jsonl`.
-
-- `trigger_from_env()`:
-  - Reads:
-    - `BRIGHTDATA_API_KEY`
-    - `BRIGHTDATA_DATASET_ID` (default: Bright Data dataset id)
-    - `BRIGHTDATA_KEYWORD` (default `"Apartment"`)
-    - `BRIGHTDATA_CITY` (default `"Provo, UT"`)
-    - `BRIGHTDATA_RADIUS_MILES` (default 20)
-    - `BRIGHTDATA_LIMIT_PER_INPUT` (default 10 for local/testing)
-  - Calls `trigger_snapshot(...)`.
-  - Prints the JSON response.
-  - Extracts `snapshot_id`, records it in `snapshot_history.jsonl` with `status="initiated"`, and prints a confirmation.
-
----
-
-### `uvrental.brightdata_download` – snapshot status + JSON download
-
-`uvrental.brightdata_download` handles checking snapshot readiness and downloading the resulting JSON.
-
-- `SNAPSHOT_HISTORY_PATH`:
-  - Same history file as `uvrental.brightdata`.
-
-- `_append_history(snapshot_id, status)`:
-  - Appends `{timestamp, snapshot_id, status, updated_ts}` to `snapshot_history.jsonl`.
-
-- `latest_pending_snapshot_id() -> str`:
-  - Reads `snapshot_history.jsonl` (if missing, exits with an error).
-  - Scans the file from the end, tracking the most recent record per `snapshot_id`.
-  - Returns the **latest** `snapshot_id` whose most recent `status` is **not** `"downloaded"`.
-
-- `get_snapshot_status(api_key, snapshot_id) -> (status: str, payload: dict)`:
-  - Calls Bright Data’s `progress` endpoint:
-    - On 404 → prints a message and exits with error.
-    - Otherwise → returns `(status_string, progress_payload)`.
-
-- `download_snapshot(api_key, snapshot_id) -> (Path, int)`:
-  - Calls Bright Data’s `snapshot` endpoint:
-    - If status 202 → prints “not ready” and exits.
-    - Otherwise → parses JSON.
-  - Saves JSON to `marketplace_snapshot_<snapshot_id>.json` at the repo root.
-  - Computes a best‑effort record count:
-    - If payload is a list → `len(payload)`.
-    - If payload is a dict → `len(payload[key])` for the first list under `data` / `results` / `listings` / `items` / `records`.
-  - Appends `"downloaded"` for this `snapshot_id` in `snapshot_history.jsonl`.
-  - Returns `(output_path, count)`.
-
-- `run_from_env(snapshot_id_arg: str | None)`:
-  - Reads `BRIGHTDATA_API_KEY` from env.
-  - Determines `snapshot_id`:
-    - If `snapshot_id_arg` is provided → uses it (after validation).
-    - Else → calls `latest_pending_snapshot_id()`.
-  - Calls `get_snapshot_status(...)` and prints `Status for {snapshot_id}: <status>`.
-  - If status is **not** `"ready"`:
-    - `_append_history(snapshot_id, "running")`, exits.
-  - If `"ready"`:
-    - Calls `download_snapshot(...)`.
-    - Prints `Saved to {path} ({count} records)`.
-
----
-
-### `uvrental.pipeline` – orchestrator and DB inspector
-
-`uvrental.pipeline` provides a convenient way to ingest snapshots from history, inspect the DB, and rebuild the static page.
-
-- `print_listings(db_path)`:
-  - Opens the DB via `get_connection`.
-  - SELECTs all rows from `listings` ordered by `id`.
-  - Prints a readable summary per listing:
-    - `id`, `source`, `source_listing_id`, `title`, `link`, `price`, `beds`, `baths`, `address_raw`, `first_seen`, `last_seen`.
-
-- `run_pipeline()`:
-  - Resolves `db_path` from `LISTINGS_DB` (with default from `uvrental.ingest`).
-  - Prints a message about ingesting downloaded snapshots.
-  - Calls `ingest_all_downloaded_from_history(db_path)` and shows how many records were ingested.
-  - Prints listing data from the DB via `print_listings(db_path)`.
-  - Calls `uvrental.build_page.build_page()` to regenerate `docs/index.html`.
-
----
-
-## CLI scripts (`scripts/*`)
-
-The `scripts/` directory contains the supported command‑line entrypoints. Each script is intentionally thin and delegates to `uvrental` modules.
-
-- `scripts/scrape.py`
-  - Ensures the project root is on `sys.path`.
-  - Imports `uvrental.brightdata.trigger_from_env` and calls it.
-  - Usage: `python scripts/scrape.py`
-
-- `scripts/scrape_download.py`
-  - Ensures the project root is on `sys.path`.
-  - Imports `uvrental.brightdata_download.run_from_env`.
-  - Reads an optional `snapshot_id` positional argument and passes it through.
-  - Usage:
-    - `python scripts/scrape_download.py`
-    - `python scripts/scrape_download.py <snapshot_id>`
-
-- `scripts/run_pipeline.py`
-  - Ensures the project root is on `sys.path`.
-  - Imports `uvrental.pipeline.run_pipeline` and calls it.
-  - Usage: `python scripts/run_pipeline.py`
-
-These three scripts are the **canonical** way to run the pipeline locally and (eventually) in CI.
-
----
-
-## Test suite (`tests/`)
-
-The project uses **pytest** with unit and integration tests aligned with Phases 0 and 1.
-
-- `tests/conftest.py`
-  - Ensures the project root is on `sys.path` so imports like `uvrental.db` and `uvrental.ingest` work.
-  - Fixtures:
-    - `tmp_db_path` – per‑test temporary DB path.
-    - `tmp_db_conn` – open connection with schema initialized, closed after the test.
-    - `env_vars` – sets safe env vars for tests (`LISTINGS_DB`, Bright Data API keys) so tests never touch a real DB or credentials.
-
-- `tests/unit/test_db.py`
-  - Validates `init_schema` creates the expected columns and uniqueness constraint.
-  - Exercises `normalize_address` for various patterns.
-  - Verifies `upsert_listing` behavior:
-    - Insert vs update (preserves `first_seen`, updates `last_seen`).
-    - `normalized_address` derivation.
-    - `extracted` COALESCE semantics.
-  - Tests run‑status helpers (`update_run_status_after_fetch`, `update_run_status_after_llm`, `update_run_status_after_build_page`, `get_run_status`).
-
-- `tests/unit/test_fetch_utils.py`
-  - Targets normalization helpers now in `uvrental.ingest`:
-    - `_source_listing_id`, `_numeric_listing_id`, `_norm_price`, `_norm_num`, `_address_raw`, and `normalize_record`.
-  - Ensures stable ids and canonical Marketplace URLs.
-
-- `tests/unit/test_build_page.py`
-  - Covers `_thirty_days_ago_iso()` ordering to avoid off‑by‑one errors on the 30‑day cutoff.
-
-- `tests/integration/test_phase0_fetch_dry_run.py`
-  - Calls `run_fetch_dry_run` against a temporary DB.
-  - Asserts:
-    - Correct number of rows.
-    - No duplicate `(source, source_listing_id)` pairs.
-    - Timestamps are populated.
-    - Canonical Marketplace URLs are used.
-
-- `tests/integration/test_phase0_main_dry_run.py`
-  - Invokes the orchestrator via `scripts/run_pipeline.py` (in updated form).
-  - Verifies:
-    - Exit code 0.
-    - DB has at least one row.
-    - Output contains either a listing summary or a clear “no listings” message.
-
-- `tests/integration/test_phase1_build_page_placeholder.py`
-  - Runs `run_fetch_dry_run` then `build_page`.
-  - Asserts:
-    - `index.html` exists.
-    - Content includes run‑status and at least one mock listing title.
-    - `run_status.displayed` reflects the number of listings rendered.
-    - Listings older than 30 days are excluded.
-    - Clearly non‑Utah listings are deleted from the DB and do not appear in the HTML.
-
-- `tests/acceptance/test_pipeline_future_placeholder.py`
-  - Currently skipped; reserved for future full‑pipeline/multi‑site/robustness tests.
-
----
-
-## Configuration and environment
-
-**Configuration style (current):**
-
-- All runtime configuration is via **environment variables**, typically loaded from `.env` in local development.
-- A more structured TOML config is planned (see `plan/phase-2.md`) but not yet wired in.
-
-**Key env vars in use now:**
-
-- **Bright Data / scraping:**
-  - `BRIGHTDATA_API_KEY` – required by `scripts/scrape.py` and `scripts/scrape_download.py`.
-  - `BRIGHTDATA_DATASET_ID` – Facebook Marketplace dataset id (default configured in `uvrental.brightdata`).
-  - `BRIGHTDATA_KEYWORD` – search keyword (default `"Apartment"`).
-  - `BRIGHTDATA_CITY` – city string (default `"Provo, UT"`).
-  - `BRIGHTDATA_RADIUS_MILES` – radius around city (default 20).
-  - `BRIGHTDATA_LIMIT_PER_INPUT` – number of results per dataset “input” (small default for testing; larger in production).
-
-- **Database and output:**
-  - `LISTINGS_DB` – SQLite DB path (default `listings.db`).
-  - `BUILD_PAGE_OUTPUT` – directory for `index.html` (default `docs`).
-  - `PRICE_MIN`, `PRICE_MAX` – price filter bounds for the rendered page.
-
-**Security note:** `.env` is gitignored. API keys and secrets must not be committed. In CI (e.g. GitHub Actions), env vars should be provided via platform‑specific secrets.
-
----
-
-## Current status and intended evolution
-
-- **Implemented:**
-  - Phase 0 core:
-    - SQLite schema and deduplication (`uvrental.db`).
-    - Bright Data snapshot ingestion and normalization (`uvrental.ingest`).
-    - Developer orchestrator for ingest + build (`uvrental.pipeline` via `scripts/run_pipeline.py`).
-    - Snapshot triggering and download helpers (`uvrental.brightdata`, `uvrental.brightdata_download`) plus `snapshot_history.jsonl` and `marketplace_snapshot_*.json` files.
-    - pytest suite (unit + integration) covering normalization, ingestion, and page build.
-  - Phase 1:
-    - `run_status` table and pipeline updates from `uvrental.ingest` and `uvrental.build_page`.
-    - Static HTML generator (`uvrental.build_page`) with:
-      - Price filter.
-      - View-based 30-day removal (`last_seen` cutoff).
-
-- **Planned next steps (per `plan/` docs):**
-  - Phase 2+: TOML config loader, Claude/LLM extraction for new in‑range listings only.
-  - Phase 3+: Multi‑site support (Zillow, KSL, Apartments.com), GitHub Actions scheduling, and a separate private repo for data.
-  - Phase 4+: Webpage polish and observability (richer listing display, better run‑status presentation).
-  - Phase 5+: Robustness and operational hardening (error handling, logging, optional diff reports).
-
-This document should be updated whenever major architectural changes are made (new phases implemented, new components added, or responsibilities of existing modules change).
-
+Secrets must not be committed; use `.env` locally and GitHub Secrets (or equivalent) in CI.

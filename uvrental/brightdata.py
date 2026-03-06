@@ -11,6 +11,7 @@ The CLI entrypoint for this lives in scripts/scrape.py.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,8 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+log = logging.getLogger(__name__)
 
 # History file lives at the project root (shared with uvrental.ingest).
 SNAPSHOT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "snapshot_history.jsonl"
@@ -81,16 +84,23 @@ def trigger_snapshot(
         ],
     }
     url = build_trigger_url(dataset_id, limit_per_input)
-    resp = requests.post(url, headers=headers, json=payload, timeout=timeout_sec)
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout_sec)
+    except requests.RequestException as e:
+        log.error("Bright Data trigger request failed: %s", e)
+        raise
     if not resp.ok:
         try:
             err: Any = resp.json()
         except Exception:
             err = resp.text[:500] if resp.text else "(empty)"
-        # Let the caller decide how to surface the error; we raise after logging.
-        print("API error:", resp.status_code, err, file=__import__("sys").stderr)
+        log.error("Bright Data trigger API error %s: %s", resp.status_code, err)
         resp.raise_for_status()
-    return resp.json()
+    try:
+        return resp.json()
+    except json.JSONDecodeError as e:
+        log.error("Bright Data trigger invalid JSON: %s", e)
+        raise
 
 
 def extract_snapshot_id(response: dict[str, Any]) -> str | None:
@@ -129,7 +139,7 @@ def trigger_from_env() -> None:
     """
     api_key = _env("BRIGHTDATA_API_KEY")
     if not api_key:
-        raise SystemExit("Missing BRIGHTDATA_API_KEY in environment")
+        raise ValueError("Missing BRIGHTDATA_API_KEY in environment")
 
     dataset_id = _env("BRIGHTDATA_DATASET_ID", DEFAULT_DATASET_ID)
     keyword = _env("BRIGHTDATA_KEYWORD", DEFAULT_KEYWORD)
@@ -139,6 +149,7 @@ def trigger_from_env() -> None:
         _env("BRIGHTDATA_LIMIT_PER_INPUT", str(DEFAULT_LIMIT_PER_INPUT))
     )
 
+    log.info("Triggering Bright Data snapshot")
     data = trigger_snapshot(
         api_key,
         dataset_id=dataset_id,

@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 
 # Import module to test private helper
-import build_page as build_page_module
+from uvrental import build_page as build_page_module
 
 
 def test_thirty_days_ago_iso_cutoff_ordering():

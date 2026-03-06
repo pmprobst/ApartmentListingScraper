@@ -289,6 +289,24 @@ def _append_history(snapshot_id: str, status: str) -> None:
         f.write("\n")
 
 
+def _update_run_status_zero_ingest(db_path: str) -> None:
+    """Record last run when zero records were ingested (so last_run_ts is still updated)."""
+    conn = get_connection(db_path)
+    try:
+        total_count = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
+        update_run_status_after_fetch(
+            conn,
+            success=True,
+            scraped=0,
+            thrown=0,
+            duplicate=0,
+            added=0,
+            total_count=total_count,
+        )
+    finally:
+        conn.close()
+
+
 def _latest_snapshot_states() -> dict[str, dict]:
     """
     Read snapshot_history.jsonl and return the latest record per snapshot_id.
@@ -324,12 +342,14 @@ def ingest_all_downloaded_from_history(
     states = _latest_snapshot_states()
     if not states:
         log.info("No snapshot history entries found.")
+        _update_run_status_zero_ingest(db_path)
         return 0
 
     if snapshot_id is not None:
         rec = states.get(snapshot_id)
         if not rec:
             log.warning("Snapshot id %s not found in history; nothing to ingest.", snapshot_id)
+            _update_run_status_zero_ingest(db_path)
             return 0
         status = (rec.get("status") or "").lower()
         if status != "downloaded":
@@ -338,6 +358,7 @@ def ingest_all_downloaded_from_history(
                 snapshot_id,
                 status,
             )
+            _update_run_status_zero_ingest(db_path)
             return 0
         snapshot_ids = [snapshot_id]
     else:
@@ -356,12 +377,17 @@ def ingest_all_downloaded_from_history(
             )
             continue
         log.info("Ingesting downloaded snapshot %s from %s", sid, snapshot_path)
-        n = ingest_snapshot_file(db_path, snapshot_path)
-        total_ingested += n
-        _append_history(sid, "ingested")
+        try:
+            n = ingest_snapshot_file(db_path, snapshot_path)
+            total_ingested += n
+            _append_history(sid, "ingested")
+        except Exception as e:
+            log.exception("Failed to ingest snapshot %s: %s", sid, e)
+            raise
 
     if total_ingested == 0:
         log.info("No downloaded snapshots needed ingestion.")
+        _update_run_status_zero_ingest(db_path)
     else:
         log.info("Ingested a total of %d records from downloaded snapshots.", total_ingested)
     return total_ingested

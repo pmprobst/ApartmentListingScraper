@@ -22,7 +22,7 @@ def test_main_populates_db_and_prints_listings(tmp_db_path, env_vars):
     env["LISTINGS_DB"] = db_path
 
     result = subprocess.run(
-        [sys.executable, "scripts/run_pipeline.py"],
+        [sys.executable, "main.py"],
         cwd=str(PROJECT_ROOT),
         env=env,
         capture_output=True,
@@ -30,8 +30,7 @@ def test_main_populates_db_and_prints_listings(tmp_db_path, env_vars):
     )
 
     assert result.returncode == 0
-    # Should either show listings or say there are none
-    assert (
-        "Listing data (" in result.stdout or "No listings in DB." in result.stdout
-    )
+    # Full pipeline prints ingest and build messages
+    assert "Ingested" in result.stdout
+    assert "Built HTML" in result.stdout
 

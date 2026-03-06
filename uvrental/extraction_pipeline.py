@@ -10,10 +10,13 @@ Process script selects pending, calls Claude, writes results, sets 'done'.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from .db import get_connection, update_listing_extraction, update_run_status_after_llm
 from .extraction_regex import run_stage1
+
+log = logging.getLogger(__name__)
 
 
 def get_listings_needing_regex(conn=None, db_path: str | None = None):
@@ -143,6 +146,7 @@ def run_initiate_phase(db_path: str) -> int:
     conn = get_connection(db_path)
     try:
         rows = get_listings_needing_regex(conn)
+        log.info("Regex phase: %d listings to process", len(rows))
         for r in rows:
             run_regex_and_update(
                 conn,
@@ -171,6 +175,7 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
             rows = get_listings_pending_llm(conn, limit=batch_size, db_path=db_path)
             if not rows:
                 break
+            log.info("Claude batch: processing %d pending listings", len(rows))
         finally:
             conn.close()
 
@@ -184,7 +189,8 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
         ]
         try:
             llm_results = call_claude_batch(batch)
-        except Exception:
+        except Exception as e:
+            log.warning("Claude batch failed (%s), falling back to single-item calls", e)
             llm_results = []
             for item in batch:
                 try:
@@ -192,7 +198,8 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
                         item["title"], item["description"], item["stage1"]
                     )
                     llm_results.append(out)
-                except Exception:
+                except Exception as e2:
+                    log.warning("Claude single-item failed: %s", e2)
                     llm_results.append({})
         conn = get_connection(db_path)
         try:

@@ -1,10 +1,15 @@
 """
-High-level orchestration helpers for running the ingestion + build pipeline.
+High-level orchestration helpers for running the full pipeline (ingest + extraction + build).
 """
 
-from .db import get_connection
+import logging
+
+from .db import get_connection, update_run_status_after_fetch
 from .build_page import build_page as build_static_page
 from .ingest import LISTINGS_DB, DEFAULT_DB, _env, ingest_all_downloaded_from_history
+from .extraction_pipeline import run_initiate_phase, run_process_until_empty
+
+log = logging.getLogger(__name__)
 
 
 def print_listings(db_path: str) -> None:
@@ -41,23 +46,58 @@ def print_listings(db_path: str) -> None:
         conn.close()
 
 
-def run_pipeline() -> None:
+def run_full_pipeline() -> None:
     """
-    Ingest all downloaded snapshots into the DB, print listing summary,
-    and build the static HTML page.
+    Run the full pipeline: ingest downloaded snapshots, build HTML, run extraction
+    (regex then Claude until queue empty), then build HTML again.
+    On failure, updates run_status with success=False and re-raises.
     """
-    print("Ingesting all downloaded snapshots into DB...\n")
     db_path = _env(LISTINGS_DB, DEFAULT_DB)
-    n = ingest_all_downloaded_from_history(db_path)
-    print(f"\nIngested {n} records into {db_path}.\n")
-    print("\nListing data from DB:\n")
-    print_listings(db_path)
+    try:
+        log.info("Starting full pipeline (ingest -> build -> extraction -> build)")
+        n = ingest_all_downloaded_from_history(db_path)
+        log.info("Ingest complete: %d records", n)
+        print(f"Ingested {n} records from downloaded snapshots.")
 
-    print("\nBuilding static HTML page...\n")
-    build_static_page()
-    print("Static page build complete (see docs/index.html by default).")
+        build_static_page()
+        log.info("Build page (first pass) complete")
+        print("Built HTML (first pass).")
+
+        regex_count = run_initiate_phase(db_path)
+        log.info("Regex extraction complete: %d listings", regex_count)
+        print(f"Ran regex extraction on {regex_count} listings.")
+        llm_processed = run_process_until_empty(db_path)
+        log.info("Claude extraction complete: %d listings", llm_processed)
+        print(f"Processed {llm_processed} listings with Claude extraction.")
+
+        build_static_page()
+        log.info("Build page (final) complete")
+        print("Built HTML (final).")
+        log.info("Full pipeline complete")
+    except Exception as e:
+        log.exception("Pipeline failed: %s", e)
+        try:
+            conn = get_connection(db_path)
+            total_count = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
+            update_run_status_after_fetch(
+                conn,
+                success=False,
+                scraped=0,
+                thrown=0,
+                duplicate=0,
+                added=0,
+                total_count=total_count,
+            )
+            conn.close()
+        except Exception as e2:
+            log.warning("Could not update run_status on failure: %s", e2)
+        raise
+
+
+# Alias for backward compatibility; same as run_full_pipeline.
+run_pipeline = run_full_pipeline
 
 
 if __name__ == "__main__":
-    run_pipeline()
+    run_full_pipeline()
 

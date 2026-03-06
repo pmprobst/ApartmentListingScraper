@@ -1,5 +1,5 @@
-from db import get_connection
-from ingest_records import MOCK_RECORDS, run_fetch_dry_run
+from uvrental.db import get_connection
+from uvrental.ingest import MOCK_RECORDS, run_fetch_dry_run
 
 
 def test_run_fetch_dry_run_inserts_mock_listings(tmp_db_path):

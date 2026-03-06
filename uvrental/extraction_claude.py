@@ -9,14 +9,16 @@ See plan/extraction_plan.md.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
-import time
 from typing import Any
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You extract structured data from apartment rental listings posted on Facebook Marketplace.
 These listings are from the Provo/Orem, Utah area and are typically student or young-adult housing.
@@ -112,12 +114,16 @@ def call_claude(title: str, description: str, stage1: dict) -> dict:
     """Single-listing Claude extraction. Returns dict with 8 fields."""
     client = _load_client()
     content = build_user_message(title, description, stage1)
-    response = client.messages.create(
-        model=_model_name(),
-        max_tokens=512,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": content}],
-    )
+    try:
+        response = client.messages.create(
+            model=_model_name(),
+            max_tokens=512,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": content}],
+        )
+    except Exception as e:
+        log.error("Claude API error (single listing): %s", e)
+        raise
     text_parts = [
         getattr(c, "text", "")
         for c in getattr(response, "content", [])
@@ -137,12 +143,16 @@ def call_claude_batch(listings: list[dict]) -> list[dict]:
 
     client = _load_client()
     content = build_batch_message(listings)
-    response = client.messages.create(
-        model=_model_name(),
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": content}],
-    )
+    try:
+        response = client.messages.create(
+            model=_model_name(),
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": content}],
+        )
+    except Exception as e:
+        log.error("Claude API error (batch): %s", e)
+        raise
     text_parts = [
         getattr(c, "text", "")
         for c in getattr(response, "content", [])
