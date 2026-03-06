@@ -103,6 +103,17 @@ def _parse_utilities_included(val) -> list | str | None:
         return val
 
 
+VALID_LEASE_LENGTHS = frozenset({"summer", "summer w/ option to review", "fall/winter"})
+
+
+def _normalize_lease_length(val: Any) -> str | None:
+    """Return val if it's a valid lease_length option, else None."""
+    if val is None or not isinstance(val, str):
+        return None
+    s = val.strip()
+    return s if s in VALID_LEASE_LENGTHS else None
+
+
 def llm_result_to_db_values(llm_out: dict) -> dict[str, Any]:
     """Convert Claude batch response item to kwargs for update_listing_extraction."""
     def bool_to_int(v):
@@ -126,7 +137,7 @@ def llm_result_to_db_values(llm_out: dict) -> dict[str, Any]:
         "gender_preference": llm_out.get("gender_preference"),
         "utilities_included": utilities_str,
         "non_included_utilities_cost": llm_out.get("non_included_utilities_cost"),
-        "lease_length": llm_out.get("lease_length"),
+        "lease_length": _normalize_lease_length(llm_out.get("lease_length")),
         "llm_extraction_status": "done",
     }
 

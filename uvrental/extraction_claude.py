@@ -48,8 +48,11 @@ Field definitions:
   amounts are mentioned, convert them into one approximate monthly total (e.g. "$120/month" or
   "$80-100/month") rather than listing separate items. null if utilities are included or no cost
   estimate is given.
-- lease_length: a string describing the lease term (e.g. "spring/summer 2026", "August 2026-2027",
-  "month-to-month", "through August 14, 2026"). null if not mentioned.
+- lease_length: exactly one of these strings, or null if not mentioned or not confidently mappable:
+  "summer", "summer w/ option to review", "fall/winter".
+  Map listing language to the closest match (e.g. "spring/summer", "summer only", "April-August" → "summer";
+  "fall/winter", "August-May", "academic year" → "fall/winter"; summer with renewal option → "summer w/ option to review").
+  If the lease term does not clearly fit one of these categories, return null.
 
 When given multiple listings, return a JSON array of objects, one per listing, in the same order.
 
