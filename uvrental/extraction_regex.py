@@ -262,13 +262,19 @@ def extract_has_roommates(text: str) -> Optional[bool]:
     return None
 
 
-def run_stage1(title: str, description: str, price: float | None = None) -> dict:
+def run_stage1(
+    title: str,
+    description: str,
+    price: float | None = None,
+    db_beds: float | None = None,
+) -> dict:
     """
     Run regex extraction on title + description.
     Returns dict with extraction fields and _needs_llm flag.
     """
     combined = f"{title}\n{description}"
-    beds = extract_bedrooms(combined)
+    regex_beds = extract_bedrooms(combined)
+    beds = regex_beds if regex_beds is not None else db_beds
     baths = extract_bathrooms(combined)
     washer = extract_in_unit_washer_dryer(combined)
     gender = extract_gender_preference(combined)

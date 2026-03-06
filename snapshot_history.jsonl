@@ -34,6 +34,3 @@
 {"timestamp": "2026-03-06T06:28:37Z", "snapshot_id": "sd_mme3gkwe24aa933915", "status": "downloaded", "updated_ts": "2026-03-06T06:28:37Z"}
 {"timestamp": "2026-03-06T06:36:33Z", "snapshot_id": "sd_mme3gkwe24aa933915", "status": "ingested", "updated_ts": "2026-03-06T06:36:33Z"}
 {"timestamp": "2026-03-06T06:36:33Z", "snapshot_id": "sd_mme3w7li1z5y9k050f", "status": "ingested", "updated_ts": "2026-03-06T06:36:33Z"}
-{"timestamp": "2026-03-06T06:36:33Z", "snapshot_id": "sd_mmedyb72qkyomo66l", "status": "ingested", "updated_ts": "2026-03-06T06:36:33Z"}
-{"timestamp": "2026-03-06T06:36:33Z", "snapshot_id": "sd_mmeib2mspbagke4ok", "status": "ingested", "updated_ts": "2026-03-06T06:36:33Z"}
-{"timestamp": "2026-03-06T06:36:33Z", "snapshot_id": "sd_mmeibh5712rjefvt3d", "status": "ingested", "updated_ts": "2026-03-06T06:36:33Z"}

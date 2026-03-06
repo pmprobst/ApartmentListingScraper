@@ -132,10 +132,15 @@ def llm_result_to_db_values(llm_out: dict) -> dict[str, Any]:
 
 
 def run_regex_and_update(
-    conn, listing_id: int, title: str, description: str, price: float | None = None
+    conn,
+    listing_id: int,
+    title: str,
+    description: str,
+    price: float | None = None,
+    db_beds: float | None = None,
 ) -> None:
     """Run Stage 1 on one listing and write results to DB."""
-    s1 = run_stage1(title, description or "", price=price)
+    s1 = run_stage1(title, description or "", price=price, db_beds=db_beds)
     values = stage1_to_db_values(s1)
     update_listing_extraction(conn, listing_id, **values)
 
@@ -156,6 +161,7 @@ def run_initiate_phase(db_path: str) -> int:
                 r["title"] or "",
                 r["description"] or "",
                 r["price"],
+                r["beds"],
             )
         return len(rows)
     finally:

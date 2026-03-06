@@ -157,59 +157,61 @@ def build_page() -> None:
                 "  <h1>Utah Valley Rentals</h1>",
             ]
 
-            html_parts.append("  <section class=\"run-status\" aria-label=\"Run status\">")
-            html_parts.append("    <h2>Run status</h2>")
+            # Only show the last run timestamp under the title.
             if run is None:
                 html_parts.append(
-                    "    <p>No run recorded yet. Run <code>scrape.py</code>, "
-                    "<code>scrape_download.py</code>, and <code>main.py</code> first.</p>"
+                    f"  <p><strong>Last run:</strong> {_format_run_ts(None)}</p>"
                 )
             else:
                 success_str = "success" if run["success"] else "failure"
                 html_parts.append(
-                    f"    <p><strong>Last run:</strong> {_format_run_ts(run['last_run_ts'])} ({success_str})</p>"
+                    f"  <p><strong>Last run:</strong> {_format_run_ts(run['last_run_ts'])} ({success_str})</p>"
                 )
-                html_parts.append("    <ul>")
-                html_parts.append(f"      <li>Scraped: {run['scraped']}</li>")
-                html_parts.append(f"      <li>Thrown: {run['thrown']}</li>")
-                html_parts.append(f"      <li>Duplicate: {run['duplicate']}</li>")
-                html_parts.append(f"      <li>Added: {run['added']}</li>")
-                html_parts.append(f"      <li>Total in DB: {run['total_count']}</li>")
-                html_parts.append(f"      <li>New this run: {run['new_count']}</li>")
-                html_parts.append(f"      <li>Updated this run: {run['updated_count']}</li>")
-                html_parts.append(f"      <li>LLM processed: {run['llm_processed']}</li>")
-                html_parts.append(f"      <li>Displayed: {run['displayed']}</li>")
-                html_parts.append("    </ul>")
-            html_parts.append("  </section>")
 
+            # Listings table (no extra headings or run-status bullets).
             html_parts.append("  <section class=\"listings\" aria-label=\"Listings\">")
-            html_parts.append("    <h2>Listings</h2>")
             if not rows:
-                html_parts.append("    <p>No listings in range (price, 30-day window, and exclude female-only / has-roommates).</p>")
+                html_parts.append(
+                    "    <p>No listings in range (price, 30-day window, and exclude female-only / has-roommates).</p>"
+                )
             else:
                 html_parts.append("    <table><thead><tr>")
                 html_parts.append("      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>")
                 html_parts.append("      <th>Listing date</th>")
-                html_parts.append("      <th>In-unit W/D</th><th>Utilities</th><th>Util cost</th><th>Lease</th>")
+                html_parts.append(
+                    "      <th>In-unit W/D</th><th>Utilities</th><th>Util cost</th><th>Lease</th>"
+                )
                 html_parts.append("    </tr></thead><tbody>")
                 for r in rows:
                     title = (r["title"] or "No title").replace("<", "&lt;").replace(">", "&gt;")
-                    link = (r["link"] or "#").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    link = (
+                        (r["link"] or "#")
+                        .replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
+                    )
                     price_str = f"${r['price']:.0f}" if r["price"] is not None else "—"
                     beds_str = str(r["beds"]) if r["beds"] is not None else "—"
                     baths_str = str(r["baths"]) if r["baths"] is not None else "—"
                     listing_date_str = _format_listing_date(r["listing_date"]) or "—"
 
                     html_parts.append("      <tr>")
-                    html_parts.append(f"        <td><a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a></td>")
-                    html_parts.append(f"        <td>{price_str}</td><td>{beds_str}</td><td>{baths_str}</td>")
+                    html_parts.append(
+                        f"        <td><a href=\"{link}\" rel=\"noopener noreferrer\">{title}</a></td>"
+                    )
+                    html_parts.append(
+                        f"        <td>{price_str}</td><td>{beds_str}</td><td>{baths_str}</td>"
+                    )
                     html_parts.append(f"        <td>{listing_date_str}</td>")
                     keys = r.keys()
-                    iuw = r["in_unit_washer_dryer"] if "in_unit_washer_dryer" in keys else None
+                    iuw = (
+                        r["in_unit_washer_dryer"] if "in_unit_washer_dryer" in keys else None
+                    )
                     in_unit_wd = "—" if iuw is None else ("Yes" if iuw else "No")
+
                     def _cell(key):
                         v = r[key] if key in keys else None
-                        return (str(v).strip() if v is not None and str(v).strip() else "—")
+                        return str(v).strip() if v is not None and str(v).strip() else "—"
 
                     util_inc = _cell("utilities_included")
                     util_cost = _cell("non_included_utilities_cost")

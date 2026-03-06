@@ -32,6 +32,13 @@ Polish the generated webpage: show extracted fields, sorting/filtering, and run 
 
 - If desired, add a minimal **alert** (e.g. email or desktop notification) when new listings appear. Not required to pass Phase 4.
 
+### 7. Future extraction improvements
+
+- After the initial deployment, **beef up Claude extraction logic** for:
+  - `non_included_utilities_cost` (compute and normalize a single monthly total when possible).
+  - `lease_length` (better handling of vague or relative date ranges).
+  These should be treated as a follow-up step once the core pipeline and page are stable.
+
 ---
 
 ## Requirements to pass before moving to Phase 5
