@@ -118,6 +118,20 @@ def build_page() -> None:
             (cutoff, price_min, price_max),
         ).fetchall()
 
+        # Exclude listings that are female-only or have roommates
+        def _excluded(r):
+            keys = r.keys()
+            gender_val = r["gender_preference"] if "gender_preference" in keys else None
+            gender = (gender_val or "").strip().lower()
+            if gender == "female":
+                return True
+            hrm = r["has_roommates"] if "has_roommates" in keys else None
+            if hrm is not None and hrm != 0:
+                return True
+            return False
+
+        rows = [r for r in rows if not _excluded(r)]
+
         run = get_run_status(conn)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -166,12 +180,12 @@ def build_page() -> None:
         html_parts.append("  <section class=\"listings\" aria-label=\"Listings\">")
         html_parts.append("    <h2>Listings</h2>")
         if not rows:
-            html_parts.append("    <p>No listings in range (price and 30-day window).</p>")
+            html_parts.append("    <p>No listings in range (price, 30-day window, and exclude female-only / has-roommates).</p>")
         else:
             html_parts.append("    <table><thead><tr>")
             html_parts.append("      <th>Title</th><th>Price</th><th>Beds</th><th>Baths</th>")
             html_parts.append("      <th>Listing date</th>")
-            html_parts.append("      <th>In-unit W/D</th><th>Has roommates</th><th>Gender</th><th>Utilities</th><th>Util cost</th><th>Lease</th>")
+            html_parts.append("      <th>In-unit W/D</th><th>Utilities</th><th>Util cost</th><th>Lease</th>")
             html_parts.append("    </tr></thead><tbody>")
             for r in rows:
                 title = (r["title"] or "No title").replace("<", "&lt;").replace(">", "&gt;")
@@ -190,18 +204,13 @@ def build_page() -> None:
                 keys = r.keys()
                 iuw = r["in_unit_washer_dryer"] if "in_unit_washer_dryer" in keys else None
                 in_unit_wd = "—" if iuw is None else ("Yes" if iuw else "No")
-                hrm = r["has_roommates"] if "has_roommates" in keys else None
-                has_rm = "—" if hrm is None else ("Yes" if hrm else "No")
                 def _cell(key):
                     v = r[key] if key in keys else None
                     return (str(v).strip() if v is not None and str(v).strip() else "—")
 
-                gender = _cell("gender_preference")
                 util_inc = _cell("utilities_included")
                 util_cost = _cell("non_included_utilities_cost")
                 lease = _cell("lease_length")
-                if gender != "—":
-                    gender = _escape_html(gender)
                 if util_inc != "—":
                     util_inc = _escape_html(util_inc)
                 if util_cost != "—":
@@ -209,7 +218,7 @@ def build_page() -> None:
                 if lease != "—":
                     lease = _escape_html(lease)
                 html_parts.append(
-                    f"        <td>{in_unit_wd}</td><td>{has_rm}</td><td>{gender}</td>"
+                    f"        <td>{in_unit_wd}</td>"
                     f"<td>{util_inc}</td><td>{util_cost}</td><td>{lease}</td>"
                 )
                 html_parts.append("      </tr>")
