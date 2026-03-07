@@ -82,7 +82,7 @@ Add these secrets:
 
 - **Checkout** – public repo (code only)
 - **Clone** – private DB repo into `db_repo/` (can contain `listings.db`, `snapshot_history.jsonl`, `snapshots/`)
-- **Run** – scrape → download → ingest → extract → build_page (all use `db_repo/` for DB and snapshot data via `SNAPSHOT_DATA_DIR`)
+- **Run** – trigger snapshot → **wait for Bright Data** (polls every 90 s, up to ~15 min) → download → ingest → extract → build_page (all use `db_repo/` for DB and snapshot data via `SNAPSHOT_DATA_DIR`)
 - **Push to private repo** – updated `listings.db`, `snapshot_history.jsonl`, and `snapshots/` in `db_repo/` are committed and pushed
 - **Push site** – generated `docs/` to the public repo (GitHub Pages)
 

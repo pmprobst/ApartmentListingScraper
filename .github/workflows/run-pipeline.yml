@@ -76,13 +76,26 @@ jobs:
         run: python scripts/scrape.py
         continue-on-error: true
 
-      - name: Download snapshot (if pending)
+      - name: Wait for snapshot and download
         env:
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
           LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
           BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
           SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
-        run: python scripts/scrape_download.py || true
+        run: |
+          for i in $(seq 1 10); do
+            echo "Attempt $i/10: checking if snapshot is ready..."
+            if python scripts/scrape_download.py; then
+              echo "Snapshot downloaded successfully."
+              exit 0
+            fi
+            if [ $i -lt 10 ]; then
+              echo "Snapshot not ready yet. Waiting 90 seconds..."
+              sleep 90
+            fi
+          done
+          echo "No snapshot ready after 10 attempts (≈15 min). Ingest will use any previously downloaded snapshots."
+          exit 0
 
       - name: Ingest records
         env:
