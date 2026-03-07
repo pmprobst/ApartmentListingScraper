@@ -45,8 +45,8 @@ Output: `listings.db` and `docs/index.html` (by default). The HTML shows listing
 
 Two workflows run on a daily schedule (and can be triggered manually):
 
-- **Trigger Snapshot** (`.github/workflows/run-pipeline-trigger.yml`): Runs at **midnight UTC** daily. Triggers a Bright Data snapshot and pushes the updated `snapshot_history.jsonl` to the private repo so the pipeline run can find the new snapshot.
-- **Run Pipeline** (`.github/workflows/run-pipeline.yml`): Runs at **1am UTC** daily (1 hour later). It:
+- **Trigger Snapshot** (`.github/workflows/run-pipeline-trigger.yml`): Runs at **9am UTC** daily. Triggers a Bright Data snapshot and pushes the updated `snapshot_history.jsonl` to the private repo so the pipeline run can find the new snapshot.
+- **Run Pipeline** (`.github/workflows/run-pipeline.yml`): Runs at **10am UTC** daily (1 hour later). It:
 
 1. Clones a **separate private repo** that holds the SQLite DB and snapshot data (`snapshot_history.jsonl`, `snapshots/`).
 2. Waits for the snapshot to be ready and downloads it (with retries).

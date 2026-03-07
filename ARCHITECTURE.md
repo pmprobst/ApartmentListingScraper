@@ -78,8 +78,8 @@ Paths are configurable via `config.toml` (see `plan/config_schema.toml`) or env.
 
 Two workflows run on a daily schedule (and via manual dispatch):
 
-- **Trigger Snapshot** (`run-pipeline-trigger.yml`): Midnight UTC. Checkout, clone private DB repo, run `scripts/scrape.py`, push updated snapshot_history to private repo. No download or pipeline.
-- **Run Pipeline** (`run-pipeline.yml`): 1am UTC (1 hour later). Clone private DB repo, wait for snapshot and download (retries), run `main.py`, push DB/snapshots to private repo and `docs/` to public repo. SQLite and snapshot data stay in the private repo only.
+- **Trigger Snapshot** (`run-pipeline-trigger.yml`): 9am UTC. Checkout, clone private DB repo, run `scripts/scrape.py`, push updated snapshot_history to private repo. No download or pipeline.
+- **Run Pipeline** (`run-pipeline.yml`): 10am UTC (1 hour after trigger). Clone private DB repo, wait for snapshot and download (retries), run `main.py`, push DB/snapshots to private repo and `docs/` to public repo. SQLite and snapshot data stay in the private repo only.
 
 ## Environment variables
 
