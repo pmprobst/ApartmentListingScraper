@@ -24,6 +24,8 @@ This document explains how to configure the Utah Valley Rental Skimmer for local
    - `LISTINGS_DB` – SQLite path (overrides `paths.db`)
    - `BUILD_PAGE_OUTPUT` – output directory (overrides `paths.output`)
    - `SNAPSHOT_DATA_DIR` – directory for `snapshot_history.jsonl` and `snapshots/` (overrides default: project root)
+   - `PRICE_MIN` / `PRICE_MAX` – override config price filter (e.g. for CI or local testing)
+   - `DISPLAY_DAYS` – show listings with last_seen within this many days (default 30; e.g. 90 for older data)
    - `CONFIG_FILE` – path to config (overrides default)
    - `CLAUDE_MODEL` – Claude model name (overrides `claude.model`)
 

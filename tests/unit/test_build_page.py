@@ -12,12 +12,12 @@ from uvrental import build_page as build_page_module
 
 def test_thirty_days_ago_iso_cutoff_ordering():
     """
-    _thirty_days_ago_iso() returns a UTC cutoff such that:
+    _cutoff_iso(30) returns a UTC cutoff such that:
     - last_seen 31 days ago is before cutoff (excluded),
     - last_seen 29 days ago is after cutoff (included).
-    Guards against off-by-one errors in the 30-day window.
+    Guards against off-by-one errors in the display window.
     """
-    cutoff = build_page_module._thirty_days_ago_iso()
+    cutoff = build_page_module._cutoff_iso(30)
     now = datetime.now(timezone.utc)
     thirty_one_days_ago = (now - timedelta(days=31)).strftime("%Y-%m-%dT%H:%M:%SZ")
     twenty_nine_days_ago = (now - timedelta(days=29)).strftime("%Y-%m-%dT%H:%M:%SZ")

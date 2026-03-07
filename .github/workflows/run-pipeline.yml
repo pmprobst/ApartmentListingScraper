@@ -34,6 +34,17 @@ jobs:
           DB_REPO="${REPO:-$DEFAULT_REPO}"
           git clone "https://x-access-token:${TOKEN}@github.com/${DB_REPO}.git" db_repo
 
+      - name: Debug – verify cloned DB
+        run: |
+          echo "=== db_repo contents ==="
+          ls -la db_repo/
+          echo "=== listings.db size ==="
+          if [ -f db_repo/listings.db ]; then
+            ls -la db_repo/listings.db
+          else
+            echo "db_repo/listings.db NOT FOUND"
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -41,6 +52,20 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Debug – row count in cloned DB
+        run: |
+          python -c "
+          import sqlite3
+          db = '${{ github.workspace }}/db_repo/listings.db'
+          conn = sqlite3.connect(db)
+          n = conn.execute('SELECT COUNT(*) FROM listings').fetchone()[0]
+          print(f'Listings in {db}: {n}')
+          if n > 0:
+            r = conn.execute('SELECT MIN(last_seen), MAX(last_seen) FROM listings').fetchone()
+            print(f'last_seen range: {r[0]} to {r[1]}')
+          conn.close()
+          "
 
       - name: Trigger Bright Data snapshot
         env:

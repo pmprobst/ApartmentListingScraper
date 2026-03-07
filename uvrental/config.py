@@ -109,13 +109,25 @@ def get_snapshots_dir() -> Path:
 
 
 def get_price_min() -> int:
-    """Min price from config search.price_min."""
+    """Min price from env PRICE_MIN or config search.price_min."""
+    env_val = os.environ.get("PRICE_MIN", "").strip()
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            pass
     cfg = get_config()
     return int(cfg.get("search", {}).get("price_min", 0))
 
 
 def get_price_max() -> int:
-    """Max price from config search.price_max."""
+    """Max price from env PRICE_MAX or config search.price_max."""
+    env_val = os.environ.get("PRICE_MAX", "").strip()
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            pass
     cfg = get_config()
     return int(cfg.get("search", {}).get("price_max", 2000))
 
@@ -161,6 +173,18 @@ def get_run_status_store() -> str:
     """Run status store from config run_status.store."""
     cfg = get_config()
     return cfg.get("run_status", {}).get("store", "sqlite")
+
+
+def get_display_days() -> int:
+    """Number of days for last_seen window (listings older are hidden). Env DISPLAY_DAYS or config."""
+    env_val = os.environ.get("DISPLAY_DAYS", "").strip()
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            pass
+    cfg = get_config()
+    return int(cfg.get("search", {}).get("display_days", 30))
 
 
 def reset_config_cache() -> None:

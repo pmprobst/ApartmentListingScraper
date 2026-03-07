@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
 
-from .config import get_db_path, get_output_dir, get_price_min, get_price_max
+from .config import get_db_path, get_output_dir, get_price_min, get_price_max, get_display_days
 from .db import (
     get_connection,
     get_run_status,
@@ -22,9 +22,10 @@ from .db import (
 load_dotenv()
 
 
-def _thirty_days_ago_iso() -> str:
+def _cutoff_iso(days: int) -> str:
+    """Return ISO timestamp for (now - days) in UTC."""
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=30)
+    cutoff = now - timedelta(days=days)
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -65,12 +66,16 @@ def build_page() -> None:
     output_dir = get_output_dir()
     price_max = get_price_max()
     price_min = get_price_min()
-    cutoff = _thirty_days_ago_iso()
-    log.info("Building page (output_dir=%s)", output_dir)
+    display_days = get_display_days()
+    cutoff = _cutoff_iso(display_days)
+    log.info("Building page (output_dir=%s, display_days=%d, db_path=%s)", output_dir, display_days, db_path)
 
     try:
         conn = get_connection(db_path)
         try:
+            total_in_db = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
+            log.info("Listings in DB: %d", total_in_db)
+
             rows = conn.execute(
             """
             SELECT
@@ -99,6 +104,9 @@ def build_page() -> None:
             (cutoff, price_min, price_max),
             ).fetchall()
 
+            after_filter = len(rows)
+            log.info("Listings after date+price filter (last_seen>=%s): %d", cutoff, after_filter)
+
             # Exclude listings that are female-only, have roommates, or summer-only (no renewal option)
             def _excluded(r):
                 keys = r.keys()
@@ -115,6 +123,7 @@ def build_page() -> None:
                 return False
 
             rows = [r for r in rows if not _excluded(r)]
+            log.info("Listings after exclusions (displayed): %d", len(rows))
 
             run = get_run_status(conn)
             Path(output_dir).mkdir(parents=True, exist_ok=True)
