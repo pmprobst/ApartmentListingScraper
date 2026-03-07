@@ -2,9 +2,9 @@
 Bright Data snapshot status + download utilities.
 
 This module encapsulates the logic for:
-- Finding the latest pending snapshot_id from snapshot_history.jsonl.
-- Checking snapshot status.
-- Downloading a ready snapshot payload to marketplace_snapshot_<id>.json.
+- Finding pending snapshot_ids from snapshot_history.jsonl (all pending, oldest first).
+- Checking snapshot status via the progress API.
+- Downloading ready snapshot payloads to marketplace_snapshot_<id>.json.
 
 The CLI entrypoint for this lives in scripts/scrape_download.py.
 """
@@ -61,6 +61,52 @@ def _append_history(snapshot_id: str, status: str) -> None:
         f.write("\n")
 
 
+def _latest_snapshot_states() -> dict[str, str]:
+    """Read history and return the latest status per snapshot_id."""
+    path = _snapshot_history_path()
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+    states: dict[str, str] = {}
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        sid = rec.get("snapshot_id")
+        if not sid:
+            continue
+        states[sid] = (rec.get("status") or "").lower()
+    return states
+
+
+def _pending_snapshot_ids_oldest_first() -> list[str]:
+    """
+    Return snapshot_ids that are still pending (not downloaded/ingested),
+    in chronological order (oldest first) so we try the longest-running first.
+    """
+    path = _snapshot_history_path()
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+    order: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        sid = rec.get("snapshot_id")
+        if not sid or sid in seen:
+            continue
+        seen.add(sid)
+        order.append(sid)
+    states = _latest_snapshot_states()
+    return [sid for sid in order if states.get(sid, "") not in {"downloaded", "ingested"}]
+
+
 def latest_pending_snapshot_id() -> str:
     """
     Return the latest snapshot_id whose most recent status is still pending
@@ -71,23 +117,10 @@ def latest_pending_snapshot_id() -> str:
     path = _snapshot_history_path()
     if not path.exists():
         raise FileNotFoundError(f"No snapshot history file at {path}")
-    with path.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
-    seen_ids: set[str] = set()
-    for line in reversed(lines):
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        sid = rec.get("snapshot_id")
-        if not sid or sid in seen_ids:
-            continue
-        seen_ids.add(sid)
-        status = (rec.get("status") or "").lower()
-        if status in {"downloaded", "ingested"}:
-            continue
-        return sid
-    raise ValueError(f"No valid snapshot_id entries found in {_snapshot_history_path()}")
+    pending = _pending_snapshot_ids_oldest_first()
+    if not pending:
+        raise ValueError(f"No valid snapshot_id entries found in {_snapshot_history_path()}")
+    return pending[-1]
 
 
 def get_snapshot_status(api_key: str, snapshot_id: str) -> Tuple[str, dict[str, Any]]:
@@ -180,9 +213,9 @@ def run_from_env(snapshot_id_arg: str | None = None) -> None:
     """
     Convenience function used by the CLI:
     - Reads API key from env.
-    - Determines snapshot_id (CLI arg or latest pending).
-    - Prints status and downloads snapshot when ready.
-    Raises ValueError for missing/invalid args; SnapshotNotReadyError on 202; RuntimeError on 404.
+    - With no arg: checks all pending snapshots (oldest first), downloads any that are ready.
+    - With <snapshot_id>: checks that snapshot only and downloads if ready.
+    Raises ValueError for missing/invalid args; SnapshotNotReadyError when a single snapshot is not ready.
     """
     api_key = _env("BRIGHTDATA_API_KEY")
     if not api_key:
@@ -192,21 +225,49 @@ def run_from_env(snapshot_id_arg: str | None = None) -> None:
         snapshot_id = snapshot_id_arg.strip()
         if not snapshot_id:
             raise ValueError("Snapshot ID must not be empty")
+        ids_to_try = [snapshot_id]
+        single_snapshot = True
     else:
-        snapshot_id = latest_pending_snapshot_id()
-        print(f"Using latest snapshot_id from history: {snapshot_id}")
+        ids_to_try = _pending_snapshot_ids_oldest_first()
+        if not ids_to_try:
+            raise ValueError("No pending snapshots in history")
+        single_snapshot = False
+        print(f"Found {len(ids_to_try)} pending snapshot(s); checking oldest first.")
 
-    log.info("Checking snapshot %s status", snapshot_id)
-    status, _prog = get_snapshot_status(api_key, snapshot_id)
-    print(f"Status for {snapshot_id}: {status}")
+    downloaded = 0
+    for sid in ids_to_try:
+        try:
+            status, _prog = get_snapshot_status(api_key, sid)
+        except RuntimeError as e:
+            log.warning("Skipping %s: %s", sid, e)
+            continue
+        log.info("Snapshot %s status: %s", sid, status)
+        if single_snapshot:
+            print(f"Status for {sid}: {status}")
+        if status != "ready":
+            _append_history(sid, "running")
+            if single_snapshot:
+                raise SnapshotNotReadyError(f"Snapshot {sid} status is {status!r}, not ready")
+            continue
+        try:
+            out_path, count = download_snapshot(api_key, sid)
+            downloaded += 1
+            log.info("Downloaded snapshot %s: %d records to %s", sid, count, out_path)
+            print(f"Saved {sid} to {out_path} ({count} records)")
+        except SnapshotNotReadyError:
+            _append_history(sid, "running")
+            if single_snapshot:
+                raise
+            log.warning("Snapshot %s returned 202 (not ready); skipping.", sid)
+        except requests.RequestException as e:
+            log.warning("Download failed for %s: %s", sid, e)
+            if single_snapshot:
+                raise
 
-    if status != "ready":
-        _append_history(snapshot_id, "running")
-        raise SnapshotNotReadyError(f"Snapshot {snapshot_id} status is {status!r}, not ready")
-
-    out_path, count = download_snapshot(api_key, snapshot_id)
-    log.info("Downloaded snapshot %s: %d records to %s", snapshot_id, count, out_path)
-    print(f"Saved to {out_path} ({count} records)")
+    if not single_snapshot and downloaded == 0:
+        print("No snapshots were ready to download yet.")
+    elif not single_snapshot and downloaded > 0:
+        print(f"Downloaded {downloaded} snapshot(s).")
 
 
 if __name__ == "__main__":
