@@ -1,10 +1,9 @@
 """
 DB-backed extraction pipeline: Stage 1 (regex) and Stage 2 (LLM) queue.
 
-Listings with llm_extraction_status IS NULL and a non-empty description are
-candidates for regex (Stage 1). Rows with null/blank description are skipped.
-After regex, rows with _needs_llm get llm_extraction_status = 'pending'.
-Process script selects pending, calls Claude, writes results, sets 'done'.
+Phase 3: Only NEW listings (first_seen >= run_start_ts) within price range
+are extracted. Listings with llm_extraction_status IS NULL and non-empty
+description get regex (Stage 1); rows needing more get 'pending' for Claude.
 """
 
 from __future__ import annotations
@@ -13,31 +12,101 @@ import json
 import logging
 from typing import Any
 
+from .config import get_db_path, get_price_min, get_price_max
 from .db import get_connection, update_listing_extraction, update_run_status_after_llm
 from .extraction_regex import run_stage1
 
 log = logging.getLogger(__name__)
 
 
-def get_listings_needing_regex(conn=None, db_path: str | None = None):
-    """Listings not yet extracted (llm_extraction_status IS NULL) with a non-empty description."""
+def _get_new_cutoff_ts(conn) -> str | None:
+    """
+    Return cutoff timestamp for 'new' listings: run_start_ts from run_status.
+    If NULL (legacy), use last_run_ts - 3600 seconds as heuristic.
+    """
+    row = conn.execute(
+        "SELECT run_start_ts, last_run_ts FROM run_status WHERE id = 1"
+    ).fetchone()
+    if not row:
+        return None
+    run_start = row["run_start_ts"] if "run_start_ts" in row.keys() else None
+    if run_start:
+        return run_start
+    last_run = row["last_run_ts"] if "last_run_ts" in row.keys() else None
+    if last_run:
+        # SQLite: datetime(last_run_ts, '-3600 seconds')
+        r = conn.execute(
+            "SELECT datetime(?, '-3600 seconds') AS cutoff",
+            (last_run,),
+        ).fetchone()
+        return r["cutoff"] if r else None
+    return None
+
+
+def get_listings_needing_regex(
+    conn=None,
+    db_path: str | None = None,
+    *,
+    run_start_ts: str | None = None,
+    price_min: int | None = None,
+    price_max: int | None = None,
+):
+    """
+    Listings not yet extracted (llm_extraction_status IS NULL) with non-empty
+    description. Phase 3: only NEW (first_seen >= run_start_ts) and in price range.
+    """
     if conn is None:
-        conn = get_connection(db_path or "listings.db")
+        conn = get_connection(db_path or get_db_path())
+    if run_start_ts is None:
+        run_start_ts = _get_new_cutoff_ts(conn)
+    if price_min is None:
+        price_min = get_price_min()
+    if price_max is None:
+        price_max = get_price_max()
+
+    if run_start_ts is None:
+        # No run status: skip extraction (no new listings to identify)
+        return []
+
     return conn.execute(
         """
         SELECT id, title, description, beds, baths, price
         FROM listings
         WHERE llm_extraction_status IS NULL
           AND description IS NOT NULL AND TRIM(description) != ''
+          AND first_seen >= ?
+          AND (price IS NULL OR (price >= ? AND price <= ?))
         ORDER BY id
-        """
+        """,
+        (run_start_ts, price_min, price_max),
     ).fetchall()
 
 
-def get_listings_pending_llm(conn=None, limit: int = 5, db_path: str | None = None):
-    """Listings queued for LLM (regex already run, _needs_llm was True)."""
+def get_listings_pending_llm(
+    conn=None,
+    limit: int = 5,
+    db_path: str | None = None,
+    *,
+    run_start_ts: str | None = None,
+    price_min: int | None = None,
+    price_max: int | None = None,
+):
+    """
+    Listings queued for LLM (llm_extraction_status = 'pending').
+    Phase 3: only NEW and in price range.
+    """
     if conn is None:
-        conn = get_connection(db_path or "listings.db")
+        conn = get_connection(db_path or get_db_path())
+    if run_start_ts is None:
+        run_start_ts = _get_new_cutoff_ts(conn)
+    if price_min is None:
+        price_min = get_price_min()
+    if price_max is None:
+        price_max = get_price_max()
+
+    if run_start_ts is None:
+        return []
+
     return conn.execute(
         """
         SELECT id, title, description, beds, baths, in_unit_washer_dryer,
@@ -45,10 +114,12 @@ def get_listings_pending_llm(conn=None, limit: int = 5, db_path: str | None = No
                non_included_utilities_cost, lease_length
         FROM listings
         WHERE llm_extraction_status = 'pending'
+          AND first_seen >= ?
+          AND (price IS NULL OR (price >= ? AND price <= ?))
         ORDER BY id
         LIMIT ?
         """,
-        (limit,),
+        (run_start_ts, price_min, price_max, limit),
     ).fetchall()
 
 
@@ -185,7 +256,6 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
     Calls Claude in batches, updates DB, updates run_status.llm_processed, builds HTML.
     Returns total number of listings processed by Claude in this run.
     """
-    from .build_page import build_page
     from .extraction_claude import call_claude_batch, call_claude
 
     total_processed = 0
@@ -231,8 +301,6 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
             total_processed += count
         finally:
             conn.close()
-
-        build_page()
 
     if total_processed:
         conn = get_connection(db_path)

@@ -135,6 +135,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {col} {ctype}")
 
+    # Backfill run_start_ts on run_status (Phase 3: new vs updated tagging).
+    cur = conn.execute("PRAGMA table_info(run_status)")
+    run_status_cols = {row[1] for row in cur.fetchall()}
+    if "run_start_ts" not in run_status_cols:
+        conn.execute("ALTER TABLE run_status ADD COLUMN run_start_ts TEXT")
+
     # Drop removed columns from older schema (requires SQLite 3.35+).
     cur = conn.execute("PRAGMA table_info(listings)")
     current_cols = {row[1] for row in cur.fetchall()}
@@ -299,6 +305,35 @@ def update_listing_extraction(
         f"UPDATE listings SET {', '.join(updates)} WHERE id = ?",
         params,
     )
+    conn.commit()
+
+
+def update_run_status_run_start(conn: sqlite3.Connection) -> None:
+    """
+    Set run_start_ts at the start of ingest (Phase 3: new vs updated tagging).
+    Used to identify listings first_seen in this run for Claude extraction.
+    """
+    now = _now_iso()
+    row = conn.execute("SELECT id FROM run_status WHERE id = 1").fetchone()
+    if row is None:
+        conn.execute(
+            """
+            INSERT INTO run_status (
+                id, last_run_ts, success,
+                scraped, thrown, duplicate, added,
+                total_count, new_count, updated_count,
+                llm_processed, displayed, run_start_ts
+            ) VALUES (
+                1, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ?
+            )
+            """,
+            (now, now),
+        )
+    else:
+        conn.execute(
+            "UPDATE run_status SET run_start_ts = ? WHERE id = 1",
+            (now,),
+        )
     conn.commit()
 
 

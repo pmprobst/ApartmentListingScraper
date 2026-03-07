@@ -25,8 +25,16 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SNAPSHOT_HISTORY_PATH = PROJECT_ROOT / "snapshot_history.jsonl"
+def _snapshot_history_path():
+    from .config import get_snapshot_history_path
+    return get_snapshot_history_path()
+
+
+def _snapshots_dir():
+    from .config import get_snapshots_dir
+    return get_snapshots_dir()
+
+
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
 SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
 REQUEST_TIMEOUT_SEC = 60
@@ -39,6 +47,8 @@ def _env(key: str, default: str | None = None) -> str:
 
 def _append_history(snapshot_id: str, status: str) -> None:
     """Append a status update for a snapshot to snapshot_history.jsonl."""
+    path = _snapshot_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     record = {
         "timestamp": ts,
@@ -46,8 +56,7 @@ def _append_history(snapshot_id: str, status: str) -> None:
         "status": status,
         "updated_ts": ts,
     }
-    SNAPSHOT_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with SNAPSHOT_HISTORY_PATH.open("a", encoding="utf-8") as f:
+    with path.open("a", encoding="utf-8") as f:
         json.dump(record, f)
         f.write("\n")
 
@@ -59,9 +68,10 @@ def latest_pending_snapshot_id() -> str:
 
     Raises FileNotFoundError if history file is missing; ValueError if no valid snapshot_id.
     """
-    if not SNAPSHOT_HISTORY_PATH.exists():
-        raise FileNotFoundError(f"No snapshot history file at {SNAPSHOT_HISTORY_PATH}")
-    with SNAPSHOT_HISTORY_PATH.open("r", encoding="utf-8") as f:
+    path = _snapshot_history_path()
+    if not path.exists():
+        raise FileNotFoundError(f"No snapshot history file at {path}")
+    with path.open("r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip()]
     seen_ids: set[str] = set()
     for line in reversed(lines):
@@ -77,7 +87,7 @@ def latest_pending_snapshot_id() -> str:
         if status in {"downloaded", "ingested"}:
             continue
         return sid
-    raise ValueError(f"No valid snapshot_id entries found in {SNAPSHOT_HISTORY_PATH}")
+    raise ValueError(f"No valid snapshot_id entries found in {_snapshot_history_path()}")
 
 
 def get_snapshot_status(api_key: str, snapshot_id: str) -> Tuple[str, dict[str, Any]]:
@@ -147,7 +157,7 @@ def download_snapshot(api_key: str, snapshot_id: str) -> Tuple[Path, int]:
     except json.JSONDecodeError as e:
         log.error("Bright Data download invalid JSON for %s: %s", snapshot_id, e)
         raise
-    snapshots_dir = PROJECT_ROOT / "snapshots"
+    snapshots_dir = _snapshots_dir()
     snapshots_dir.mkdir(parents=True, exist_ok=True)
     out_path = snapshots_dir / f"marketplace_snapshot_{snapshot_id}.json"
     with out_path.open("w") as f:

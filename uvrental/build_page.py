@@ -1,12 +1,10 @@
 """
 Phase 1: Generate static HTML from SQLite listings and run_status.
-Reads DB path, output path, and price filter from env. Applies 30-day window.
-See plan/phase-1.md and plan/features.md.
+Reads DB path, output path, and price filter from config (env override for local).
+Applies 30-day window. See plan/phase-1.md and plan/features.md.
 """
 
-import json
 import logging
-import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -14,6 +12,7 @@ from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
 
+from .config import get_db_path, get_output_dir, get_price_min, get_price_max
 from .db import (
     get_connection,
     get_run_status,
@@ -21,29 +20,6 @@ from .db import (
 )
 
 load_dotenv()
-
-LISTINGS_DB = "LISTINGS_DB"
-BUILD_PAGE_OUTPUT = "BUILD_PAGE_OUTPUT"
-PRICE_MAX = "PRICE_MAX"
-PRICE_MIN = "PRICE_MIN"
-
-DEFAULT_DB = "listings.db"
-DEFAULT_OUTPUT_DIR = "docs"
-DEFAULT_PRICE_MAX = 2000
-DEFAULT_PRICE_MIN = 0
-
-
-def _env(key: str, default: str | None = None) -> str:
-    v = os.environ.get(key, default or "")
-    return v.strip() if isinstance(v, str) else ""
-
-
-def _parse_int_env(key: str, default: int) -> int:
-    s = _env(key, str(default))
-    try:
-        return int(s)
-    except ValueError:
-        return default
 
 
 def _thirty_days_ago_iso() -> str:
@@ -85,10 +61,10 @@ def build_page() -> None:
     Read listings (within price range and 30-day window) and run_status from SQLite,
     generate static HTML, write to output dir, and update run_status.displayed.
     """
-    db_path = _env(LISTINGS_DB, DEFAULT_DB)
-    output_dir = _env(BUILD_PAGE_OUTPUT, DEFAULT_OUTPUT_DIR)
-    price_max = _parse_int_env(PRICE_MAX, DEFAULT_PRICE_MAX)
-    price_min = _parse_int_env(PRICE_MIN, DEFAULT_PRICE_MIN)
+    db_path = get_db_path()
+    output_dir = get_output_dir()
+    price_max = get_price_max()
+    price_min = get_price_min()
     cutoff = _thirty_days_ago_iso()
     log.info("Building page (output_dir=%s)", output_dir)
 

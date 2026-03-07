@@ -70,11 +70,17 @@ def _load_client():
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set.")
-    return anthropic.Anthropic()
+
+    from .config import get_claude_timeout
+
+    timeout = get_claude_timeout()
+    return anthropic.Anthropic(timeout=timeout)
 
 
 def _model_name() -> str:
-    return os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514").strip() or "claude-sonnet-4-20250514"
+    from .config import get_claude_model
+
+    return get_claude_model()
 
 
 def build_user_message(title: str, description: str, stage1: dict) -> str:

@@ -1,0 +1,109 @@
+# Phase 3: Run pipeline on schedule. DB lives in a separate private repo.
+# Secrets required: BRIGHTDATA_API_KEY, ANTHROPIC_API_KEY, PRIVATE_DB_REPO_TOKEN
+# Optional: PRIVATE_DB_REPO (e.g. "owner/repo-name") if different from default.
+
+name: Run Pipeline
+
+on:
+  schedule:
+    # Every 12 hours (6-24h per features.md)
+    - cron: "0 */12 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # for pushing commits
+    steps:
+      - name: Checkout public repo
+        uses: actions/checkout@v4
+
+      - name: Clone private DB repo
+        env:
+          TOKEN: ${{ secrets.PRIVATE_DB_REPO_TOKEN }}
+          REPO: ${{ secrets.PRIVATE_DB_REPO }}
+          DEFAULT_REPO: ${{ github.repository_owner }}/apartment-listings-db
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::PRIVATE_DB_REPO_TOKEN secret is not set. Add it in repo Settings > Secrets."
+            exit 1
+          fi
+          DB_REPO="${REPO:-$DEFAULT_REPO}"
+          git clone "https://x-access-token:${TOKEN}@github.com/${DB_REPO}.git" db_repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Trigger Bright Data snapshot
+        env:
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
+          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
+          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
+        run: python scripts/scrape.py
+        continue-on-error: true
+
+      - name: Download snapshot (if pending)
+        env:
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
+          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
+          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
+        run: python scripts/scrape_download.py || true
+
+      - name: Ingest records
+        env:
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
+          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
+          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
+        run: python scripts/ingest_records.py
+
+      - name: Extract (new listings only)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
+          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
+          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
+        run: python scripts/extract_new.py
+
+      - name: Build page
+        env:
+          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
+          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
+          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
+        run: python scripts/build_page.py
+
+      - name: Push DB and snapshot data to private repo
+        run: |
+          cd db_repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update listings.db and snapshot data [skip ci]"
+            git push
+          fi
+
+      - name: Push site to public repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          if git diff --cached --quiet; then
+            echo "No site changes to commit."
+          else
+            git commit -m "Update generated site [skip ci]"
+            git push
+          fi

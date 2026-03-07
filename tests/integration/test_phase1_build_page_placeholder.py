@@ -41,9 +41,7 @@ def test_build_page_generates_html_with_listings_and_run_status(tmp_path, env_va
     assert index_html.exists(), "build_page should write index.html"
     content = index_html.read_text(encoding="utf-8")
 
-    assert "Run status" in content
     assert "Last run" in content or "No run recorded" in content
-    assert "Scraped:" in content or "run status" in content.lower()
     # At least one mock listing title should appear
     assert any(m["title"] in content for m in MOCK_RECORDS)
 

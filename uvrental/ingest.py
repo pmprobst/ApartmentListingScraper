@@ -15,10 +15,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .config import get_db_path, get_snapshot_history_path, get_snapshots_dir
 from .db import (
     get_connection,
     upsert_listing,
     update_run_status_after_fetch,
+    update_run_status_run_start,
 )
 
 load_dotenv()
@@ -26,18 +28,13 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-# Env: DB path
-LISTINGS_DB = "LISTINGS_DB"
-DEFAULT_DB = "listings.db"
-
-# Snapshot history and snapshot JSONs live at the project root.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SNAPSHOT_HISTORY_PATH = PROJECT_ROOT / "snapshot_history.jsonl"
+# Snapshot history and snapshots dir (configurable via paths.data_dir or SNAPSHOT_DATA_DIR).
+def _snapshot_history_path():
+    return get_snapshot_history_path()
 
 
-def _env(key: str, default: str | None = None) -> str:
-    v = os.environ.get(key, default or "")
-    return v.strip() if isinstance(v, str) else ""
+def _snapshots_dir():
+    return get_snapshots_dir()
 
 
 def _source_listing_id(record: dict) -> str:
@@ -278,6 +275,8 @@ def _append_history(snapshot_id: str, status: str) -> None:
     """Append a status update for a snapshot to snapshot_history.jsonl."""
     from datetime import datetime, timezone
 
+    path = _snapshot_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     record = {
         "timestamp": ts,
@@ -285,7 +284,7 @@ def _append_history(snapshot_id: str, status: str) -> None:
         "status": status,
         "updated_ts": ts,
     }
-    with SNAPSHOT_HISTORY_PATH.open("a", encoding="utf-8") as f:
+    with path.open("a", encoding="utf-8") as f:
         json.dump(record, f)
         f.write("\n")
 
@@ -313,9 +312,10 @@ def _latest_snapshot_states() -> dict[str, dict]:
     Read snapshot_history.jsonl and return the latest record per snapshot_id.
     """
     states: dict[str, dict] = {}
-    if not SNAPSHOT_HISTORY_PATH.exists():
+    path = _snapshot_history_path()
+    if not path.exists():
         return states
-    with SNAPSHOT_HISTORY_PATH.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -338,7 +338,14 @@ def ingest_all_downloaded_from_history(
     Ingest snapshot JSON files into the DB based on snapshot history.
     """
     if db_path is None:
-        db_path = _env(LISTINGS_DB, DEFAULT_DB)
+        db_path = get_db_path()
+
+    # Phase 3: set run_start_ts at start so extraction can identify new listings
+    conn = get_connection(db_path)
+    try:
+        update_run_status_run_start(conn)
+    finally:
+        conn.close()
 
     states = _latest_snapshot_states()
     if not states:
@@ -370,7 +377,8 @@ def ingest_all_downloaded_from_history(
         ]
 
     total_ingested = 0
-    snapshots_dir = PROJECT_ROOT / "snapshots"
+    snapshots_dir = _snapshots_dir()
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
     for sid in snapshot_ids:
         snapshot_path = snapshots_dir / f"marketplace_snapshot_{sid}.json"
         if not snapshot_path.exists():
@@ -440,7 +448,7 @@ def run_fetch_dry_run(db_path: str) -> int:
 
 
 if __name__ == "__main__":
-    db_path = _env(LISTINGS_DB, DEFAULT_DB)
+    db_path = get_db_path()
     n = ingest_all_downloaded_from_history(db_path)
     if n == 0:
         log.info("No records ingested (no downloaded snapshots to process).")

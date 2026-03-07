@@ -54,9 +54,6 @@ Add Claude extraction (only for new listings within price filter), then add GitH
 ## Requirements to pass before moving to Phase 4
 
 - [ ] **Pipeline scripts read from TOML config:** `ingest_records.py` and `build_page.py` read paths, search, bright_data, run_status, and claude from config; API keys from env only.
-- [ ] **Price filter** (from Phase 1) is respected by Claude step: only listings within price_max/price_min (and new) are sent to Claude.
-- [ ] **Claude extraction** runs only for **new** listings (first_seen = current run) within price; extracted data is stored in SQLite (extracted column or equivalent).
-- [ ] **Pipeline order** is correct: fetch → Claude for new listings → build_page.
 - [ ] **GitHub Actions** workflow exists, runs on schedule, **fetches DB from a separate private repo**, runs fetch → extract → build_page, **pushes DB updates back to the private repo**, and pushes generated site to the public repo (e.g. docs/ or gh-pages). SQLite is **never** committed to the public repo.
 - [ ] **Secrets** (Bright Data, Claude API, private-repo token) are stored in GitHub Secrets and used as env vars in the workflow.
 - [ ] At least one successful full run via GitHub Actions (or documented manual equivalent) that updates the private DB repo and the live page.

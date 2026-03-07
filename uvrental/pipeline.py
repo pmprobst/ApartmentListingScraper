@@ -4,9 +4,10 @@ High-level orchestration helpers for running the full pipeline (ingest + extract
 
 import logging
 
+from .config import get_db_path
 from .db import get_connection, update_run_status_after_fetch
 from .build_page import build_page as build_static_page
-from .ingest import LISTINGS_DB, DEFAULT_DB, _env, ingest_all_downloaded_from_history
+from .ingest import ingest_all_downloaded_from_history
 from .extraction_pipeline import run_initiate_phase, run_process_until_empty
 
 log = logging.getLogger(__name__)
@@ -48,20 +49,17 @@ def print_listings(db_path: str) -> None:
 
 def run_full_pipeline() -> None:
     """
-    Run the full pipeline: ingest downloaded snapshots, build HTML, run extraction
-    (regex then Claude until queue empty), then build HTML again.
+    Run the full pipeline: ingest -> extract (new only) -> build_page.
+    Phase 3 order: ingest sets run_start_ts; extraction runs only on new
+    listings within price range; single build at end.
     On failure, updates run_status with success=False and re-raises.
     """
-    db_path = _env(LISTINGS_DB, DEFAULT_DB)
+    db_path = get_db_path()
     try:
-        log.info("Starting full pipeline (ingest -> build -> extraction -> build)")
+        log.info("Starting full pipeline (ingest -> extract -> build_page)")
         n = ingest_all_downloaded_from_history(db_path)
         log.info("Ingest complete: %d records", n)
         print(f"Ingested {n} records from downloaded snapshots.")
-
-        build_static_page()
-        log.info("Build page (first pass) complete")
-        print("Built HTML (first pass).")
 
         regex_count = run_initiate_phase(db_path)
         log.info("Regex extraction complete: %d listings", regex_count)
@@ -71,8 +69,8 @@ def run_full_pipeline() -> None:
         print(f"Processed {llm_processed} listings with Claude extraction.")
 
         build_static_page()
-        log.info("Build page (final) complete")
-        print("Built HTML (final).")
+        log.info("Build page complete")
+        print("Built HTML.")
         log.info("Full pipeline complete")
     except Exception as e:
         log.exception("Pipeline failed: %s", e)

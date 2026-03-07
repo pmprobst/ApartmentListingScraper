@@ -24,13 +24,12 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
-# History file lives at the project root (shared with uvrental.ingest).
-SNAPSHOT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "snapshot_history.jsonl"
+# History file path from config (shared with uvrental.ingest).
+def _snapshot_history_path():
+    from .config import get_snapshot_history_path
+    return get_snapshot_history_path()
 
-# Default dataset and query parameters (can be overridden by env or CLI).
-DEFAULT_DATASET_ID = "gd_lvt9iwuh6fbcwmx1a"
-DEFAULT_KEYWORD = "Apartment"
-DEFAULT_CITY = "Provo, UT"
+# Default query parameters (overridden by config or env).
 DEFAULT_RADIUS_MILES = 20
 DEFAULT_LIMIT_PER_INPUT = 10
 
@@ -117,6 +116,8 @@ def record_snapshot_history(snapshot_id: str, status: str = "initiated") -> None
     This matches the shape used by the ingest module:
     {timestamp, snapshot_id, status, updated_ts}.
     """
+    path = _snapshot_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     record = {
         "timestamp": ts,
@@ -124,8 +125,7 @@ def record_snapshot_history(snapshot_id: str, status: str = "initiated") -> None
         "status": status,
         "updated_ts": ts,
     }
-    SNAPSHOT_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with SNAPSHOT_HISTORY_PATH.open("a", encoding="utf-8") as f:
+    with path.open("a", encoding="utf-8") as f:
         json.dump(record, f)
         f.write("\n")
 
@@ -133,7 +133,7 @@ def record_snapshot_history(snapshot_id: str, status: str = "initiated") -> None
 def trigger_from_env() -> None:
     """
     Convenience function used by the CLI:
-    - Reads API key and basic params from environment.
+    - Reads API key from environment; params from config (env override).
     - Triggers a snapshot.
     - Prints the response and records snapshot_id in history.
     """
@@ -141,9 +141,11 @@ def trigger_from_env() -> None:
     if not api_key:
         raise ValueError("Missing BRIGHTDATA_API_KEY in environment")
 
-    dataset_id = _env("BRIGHTDATA_DATASET_ID", DEFAULT_DATASET_ID)
-    keyword = _env("BRIGHTDATA_KEYWORD", DEFAULT_KEYWORD)
-    city = _env("BRIGHTDATA_CITY", DEFAULT_CITY)
+    from .config import get_dataset_id, get_location, get_category
+
+    dataset_id = _env("BRIGHTDATA_DATASET_ID") or get_dataset_id()
+    keyword = _env("BRIGHTDATA_KEYWORD") or get_category()
+    city = _env("BRIGHTDATA_CITY") or get_location()
     radius = int(_env("BRIGHTDATA_RADIUS_MILES", str(DEFAULT_RADIUS_MILES)))
     limit_per_input = int(
         _env("BRIGHTDATA_LIMIT_PER_INPUT", str(DEFAULT_LIMIT_PER_INPUT))
@@ -162,7 +164,7 @@ def trigger_from_env() -> None:
     snapshot_id = extract_snapshot_id(data)
     if snapshot_id:
         record_snapshot_history(snapshot_id, status="initiated")
-        print(f"Recorded snapshot_id={snapshot_id} in {SNAPSHOT_HISTORY_PATH.name}")
+        print(f"Recorded snapshot_id={snapshot_id} in {_snapshot_history_path().name}")
     else:
         print("Warning: trigger response did not include snapshot_id")
 
