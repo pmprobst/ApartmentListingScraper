@@ -1,15 +1,13 @@
-# Phase 3: Run pipeline on schedule. DB lives in a separate private repo.
+# Download snapshots and run pipeline (ingest + extract + build). Runs 1 hour after Trigger Snapshot workflow.
+# Trigger runs daily at midnight UTC; this runs at 1am UTC so the snapshot has time to complete.
 # Secrets required: BRIGHTDATA_API_KEY, ANTHROPIC_API_KEY, PRIVATE_DB_REPO_TOKEN
-# Optional: PRIVATE_DB_REPO (e.g. "owner/repo-name") if different from default.
+# Optional: PRIVATE_DB_REPO
 
 name: Run Pipeline
 
 on:
   schedule:
-    # Every 12 hours (6-24h per features.md)
-    - cron: "0 */12 * * *"
-  push:
-    branches: [main]
+    - cron: "0 1 * * *"  # 1am UTC daily (1 hour after trigger)
   workflow_dispatch:
 
 jobs:
@@ -67,15 +65,6 @@ jobs:
           conn.close()
           "
 
-      - name: Trigger Bright Data snapshot
-        env:
-          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
-          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
-          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
-          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
-        run: python scripts/scrape.py
-        continue-on-error: true
-
       - name: Wait for snapshot and download
         env:
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
@@ -97,29 +86,13 @@ jobs:
           echo "No snapshot ready after 10 attempts (≈15 min). Ingest will use any previously downloaded snapshots."
           exit 0
 
-      - name: Ingest records
-        env:
-          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
-          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
-          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
-        run: python scripts/ingest_records.py
-
-      - name: Extract (new listings only)
+      - name: Run pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
           BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
           SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
-        run: python scripts/extract_new.py
-
-      - name: Build page
-        env:
-          LISTINGS_DB: ${{ github.workspace }}/db_repo/listings.db
-          BUILD_PAGE_OUTPUT: ${{ github.workspace }}/docs
-          SNAPSHOT_DATA_DIR: ${{ github.workspace }}/db_repo
-        run: python scripts/build_page.py
+        run: python main.py
 
       - name: Push DB and snapshot data to private repo
         run: |

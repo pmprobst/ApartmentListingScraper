@@ -32,10 +32,10 @@ Harden the pipeline: error handling, logging, and optional reporting. No new fea
 
 ## Requirements to pass before considering Phase 5 complete
 
-- [ ] **Error handling** in fetch: API errors are caught and logged; pipeline does not lose existing DB data when a source fails. At least one retry or clear failure path is implemented.
-- [ ] **Error handling** in Claude step: failures are caught and logged; pipeline continues (skip listing or mark failed); run_status can reflect failure.
-- [ ] **Logging** is in place for fetch, extract, and build_page (start/end, counts, errors); visible in GitHub Actions logs when run in CI.
-- [ ] **Documentation** covers: local run, GitHub Secrets, workflow behavior, data branch, and GitHub Pages setup.
-- [ ] **Run status on failure:** If any step fails, the workflow still updates run_status (e.g. "last run: failed") and optionally runs build_page with existing data so the page shows current state and observability.
+- [x] **Error handling** in fetch: API errors are caught and logged; pipeline does not lose existing DB data when a source fails. At least one retry or clear failure path is implemented.
+- [x] **Error handling** in Claude step: failures are caught and logged; pipeline continues (skip listing or mark failed); run_status can reflect failure.
+- [x] **Logging** is in place for fetch, extract, and build_page (start/end, counts, errors); visible in GitHub Actions logs when run in CI.
+- [x] **Documentation** covers: local run, GitHub Secrets, workflow behavior, data branch, and GitHub Pages setup.
+- [x] **Run status on failure:** If any step fails, the workflow still updates run_status (e.g. "last run: failed") and optionally runs build_page with existing data so the page shows current state and observability.
 
 When all checkboxes are satisfied, Phase 5 is complete. The MVP is done; future work (more sites, alerts, drive-time feature) can follow from [reference.md](reference.md) and [features.md](features.md).

@@ -232,6 +232,7 @@ def run_initiate_phase(db_path: str) -> int:
     Run regex extraction on all listings that have description but no extraction yet.
     Returns the number of listings processed.
     """
+    log.info("Extraction phase started (regex then Claude).")
     conn = get_connection(db_path)
     try:
         rows = get_listings_needing_regex(conn)
@@ -308,4 +309,5 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
             update_run_status_after_llm(conn, llm_processed=total_processed)
         finally:
             conn.close()
+    log.info("Extraction phase complete: %d listings processed by Claude.", total_processed)
     return total_processed

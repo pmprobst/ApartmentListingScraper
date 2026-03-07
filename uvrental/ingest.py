@@ -340,6 +340,7 @@ def ingest_all_downloaded_from_history(
     if db_path is None:
         db_path = get_db_path()
 
+    log.info("Starting ingest from snapshot history (db_path=%s).", db_path)
     # Phase 3: set run_start_ts at start so extraction can identify new listings
     conn = get_connection(db_path)
     try:

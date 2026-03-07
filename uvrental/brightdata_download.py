@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Tuple
@@ -38,6 +39,8 @@ def _snapshots_dir():
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
 SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
 REQUEST_TIMEOUT_SEC = 60
+DOWNLOAD_RETRY_DELAY_SEC = 5
+DOWNLOAD_MAX_ATTEMPTS = 2
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -129,30 +132,44 @@ def get_snapshot_status(api_key: str, snapshot_id: str) -> Tuple[str, dict[str, 
 
     Returns (status_string, full_progress_payload).
     Raises RuntimeError if the snapshot is 404/not found; requests.RequestException on network errors.
+    Retries once on timeout or 5xx.
     """
     headers = {"Authorization": f"Bearer {api_key}"}
     proxies = {"http": None, "https": None}
-    try:
-        resp = requests.get(
-            f"{PROGRESS_URL}/{snapshot_id}",
-            headers=headers,
-            proxies=proxies,
-            timeout=REQUEST_TIMEOUT_SEC,
-        )
-    except requests.RequestException as e:
-        log.error("Bright Data progress request failed for %s: %s", snapshot_id, e)
-        raise
-    if resp.status_code == 404:
-        log.error("Snapshot %s not found (404).", snapshot_id)
-        raise RuntimeError(f"Snapshot {snapshot_id} not found (404)")
-    resp.raise_for_status()
-    try:
-        prog = resp.json()
-    except json.JSONDecodeError as e:
-        log.error("Bright Data progress invalid JSON for %s: %s", snapshot_id, e)
-        raise
-    status = (prog.get("status") or "").lower()
-    return status, prog
+    url = f"{PROGRESS_URL}/{snapshot_id}"
+    last_exc: BaseException | None = None
+    for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+        try:
+            resp = requests.get(
+                url,
+                headers=headers,
+                proxies=proxies,
+                timeout=REQUEST_TIMEOUT_SEC,
+            )
+        except requests.RequestException as e:
+            log.error("Bright Data progress request failed for %s (attempt %d/%d): %s", snapshot_id, attempt, DOWNLOAD_MAX_ATTEMPTS, e)
+            last_exc = e
+            if attempt < DOWNLOAD_MAX_ATTEMPTS:
+                log.info("Retrying in %d seconds...", DOWNLOAD_RETRY_DELAY_SEC)
+                time.sleep(DOWNLOAD_RETRY_DELAY_SEC)
+            else:
+                raise
+            continue
+        if resp.status_code == 404:
+            log.error("Snapshot %s not found (404).", snapshot_id)
+            raise RuntimeError(f"Snapshot {snapshot_id} not found (404)")
+        if not resp.ok and attempt < DOWNLOAD_MAX_ATTEMPTS and resp.status_code >= 500:
+            log.error("Bright Data progress error %s for %s (attempt %d/%d); retrying.", resp.status_code, snapshot_id, attempt, DOWNLOAD_MAX_ATTEMPTS)
+            time.sleep(DOWNLOAD_RETRY_DELAY_SEC)
+            continue
+        resp.raise_for_status()
+        try:
+            prog = resp.json()
+        except json.JSONDecodeError as e:
+            log.error("Bright Data progress invalid JSON for %s: %s", snapshot_id, e)
+            raise
+        status = (prog.get("status") or "").lower()
+        return status, prog
 
 
 class SnapshotNotReadyError(Exception):
@@ -165,26 +182,37 @@ def download_snapshot(api_key: str, snapshot_id: str) -> Tuple[Path, int]:
 
     Returns (output_path, record_count). Raises SnapshotNotReadyError on 202.
     Raises requests.RequestException on network/HTTP errors.
+    Retries once on timeout or 5xx.
     """
     headers = {"Authorization": f"Bearer {api_key}"}
     proxies = {"http": None, "https": None}
-
-    try:
-        resp = requests.get(
-            f"{SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}",
-            headers=headers,
-            params={"format": "json"},
-            proxies=proxies,
-            timeout=REQUEST_TIMEOUT_SEC,
-        )
-    except requests.RequestException as e:
-        log.error("Bright Data download request failed for %s: %s", snapshot_id, e)
-        raise
-    if resp.status_code == 202:
-        log.info("Snapshot %s reported 202 (not ready) at download time.", snapshot_id)
-        raise SnapshotNotReadyError(f"Snapshot {snapshot_id} not ready (202)")
-
-    resp.raise_for_status()
+    url = f"{SNAPSHOT_DOWNLOAD_URL}/{snapshot_id}"
+    for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+        try:
+            resp = requests.get(
+                url,
+                headers=headers,
+                params={"format": "json"},
+                proxies=proxies,
+                timeout=REQUEST_TIMEOUT_SEC,
+            )
+        except requests.RequestException as e:
+            log.error("Bright Data download request failed for %s (attempt %d/%d): %s", snapshot_id, attempt, DOWNLOAD_MAX_ATTEMPTS, e)
+            if attempt < DOWNLOAD_MAX_ATTEMPTS:
+                log.info("Retrying in %d seconds...", DOWNLOAD_RETRY_DELAY_SEC)
+                time.sleep(DOWNLOAD_RETRY_DELAY_SEC)
+            else:
+                raise
+            continue
+        if resp.status_code == 202:
+            log.info("Snapshot %s reported 202 (not ready) at download time.", snapshot_id)
+            raise SnapshotNotReadyError(f"Snapshot {snapshot_id} not ready (202)")
+        if not resp.ok and attempt < DOWNLOAD_MAX_ATTEMPTS and resp.status_code >= 500:
+            log.error("Bright Data download error %s for %s (attempt %d/%d); retrying.", resp.status_code, snapshot_id, attempt, DOWNLOAD_MAX_ATTEMPTS)
+            time.sleep(DOWNLOAD_RETRY_DELAY_SEC)
+            continue
+        resp.raise_for_status()
+        break
     try:
         payload = resp.json()
     except json.JSONDecodeError as e:

@@ -89,6 +89,11 @@ def run_full_pipeline() -> None:
             conn.close()
         except Exception as e2:
             log.warning("Could not update run_status on failure: %s", e2)
+        try:
+            build_static_page()
+            log.info("Build page run after failure (existing data)")
+        except Exception as e3:
+            log.warning("Could not build page on failure: %s", e3)
         raise
 
 

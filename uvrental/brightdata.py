@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,8 @@ DEFAULT_RADIUS_MILES = 20
 DEFAULT_LIMIT_PER_INPUT = 100
 
 TRIGGER_BASE_URL = "https://api.brightdata.com/datasets/v3/trigger"
+TRIGGER_RETRY_DELAY_SEC = 5
+TRIGGER_MAX_ATTEMPTS = 2
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -83,23 +86,35 @@ def trigger_snapshot(
         ],
     }
     url = build_trigger_url(dataset_id, limit_per_input)
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=timeout_sec)
-    except requests.RequestException as e:
-        log.error("Bright Data trigger request failed: %s", e)
-        raise
-    if not resp.ok:
+    last_exc: BaseException | None = None
+    for attempt in range(1, TRIGGER_MAX_ATTEMPTS + 1):
         try:
-            err: Any = resp.json()
-        except Exception:
-            err = resp.text[:500] if resp.text else "(empty)"
-        log.error("Bright Data trigger API error %s: %s", resp.status_code, err)
-        resp.raise_for_status()
-    try:
-        return resp.json()
-    except json.JSONDecodeError as e:
-        log.error("Bright Data trigger invalid JSON: %s", e)
-        raise
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout_sec)
+        except requests.RequestException as e:
+            log.error("Bright Data trigger request failed (attempt %d/%d): %s", attempt, TRIGGER_MAX_ATTEMPTS, e)
+            last_exc = e
+            if attempt < TRIGGER_MAX_ATTEMPTS:
+                log.info("Retrying trigger in %d seconds...", TRIGGER_RETRY_DELAY_SEC)
+                time.sleep(TRIGGER_RETRY_DELAY_SEC)
+            else:
+                raise
+            continue
+        if not resp.ok:
+            try:
+                err: Any = resp.json()
+            except Exception:
+                err = resp.text[:500] if resp.text else "(empty)"
+            log.error("Bright Data trigger API error %s (attempt %d/%d): %s", resp.status_code, attempt, TRIGGER_MAX_ATTEMPTS, err)
+            if attempt < TRIGGER_MAX_ATTEMPTS and resp.status_code >= 500:
+                log.info("Retrying trigger in %d seconds...", TRIGGER_RETRY_DELAY_SEC)
+                time.sleep(TRIGGER_RETRY_DELAY_SEC)
+                continue
+            resp.raise_for_status()
+        try:
+            return resp.json()
+        except json.JSONDecodeError as e:
+            log.error("Bright Data trigger invalid JSON: %s", e)
+            raise
 
 
 def extract_snapshot_id(response: dict[str, Any]) -> str | None:

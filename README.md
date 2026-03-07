@@ -32,9 +32,45 @@ Do not commit `.env` or any file containing API keys. The `.env` file is gitigno
    Polls Bright Data; when the snapshot is ready, saves `snapshots/marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
 
 3. **Ingest, extract, and build page:** `python main.py`  
-   Ingests all downloaded snapshots into the DB, runs regex + Claude extraction on listings with descriptions, and builds `docs/index.html`. You can also run `python scripts/run_pipeline.py` for the same pipeline (with project root on path).
+   Ingests all downloaded snapshots into the DB, runs regex + Claude extraction on listings with descriptions, and builds `docs/index.html`. You can also run `python scripts/run_pipeline.py` for the same pipeline (with project root on path). The same pipeline (ingest → extract → build_page) runs in CI via `main.py`.
 
 Output: `listings.db` and `docs/index.html` (by default). The HTML shows listings within the configured price range and 30-day window; female-only, has-roommates, and summer-only (no renewal option) listings are excluded from the page.
+
+## GitHub Actions
+
+Two workflows run on a daily schedule (and can be triggered manually):
+
+- **Trigger Snapshot** (`.github/workflows/run-pipeline-trigger.yml`): Runs at **midnight UTC** daily. Triggers a Bright Data snapshot and pushes the updated `snapshot_history.jsonl` to the private repo so the pipeline run can find the new snapshot.
+- **Run Pipeline** (`.github/workflows/run-pipeline.yml`): Runs at **1am UTC** daily (1 hour later). It:
+
+1. Clones a **separate private repo** that holds the SQLite DB and snapshot data (`snapshot_history.jsonl`, `snapshots/`).
+2. Waits for the snapshot to be ready and downloads it (with retries).
+3. Runs the pipeline (`python main.py`): ingest → extract (new listings only) → build page.
+4. Pushes the updated DB and snapshot data back to the private repo.
+5. Pushes the generated `docs/` to the **public repo** so GitHub Pages can serve the site.
+
+You can also run either workflow manually from **Actions** → select the workflow → **Run workflow**.
+
+**SQLite and snapshot data live only in the private repo**; they are never committed to this public repo.
+
+### GitHub Secrets
+
+Configure these under **Settings → Secrets and variables → Actions**:
+
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `BRIGHTDATA_API_KEY` | Yes | Bright Data API key for trigger and download. |
+| `ANTHROPIC_API_KEY` | Yes | Claude API key for extraction. |
+| `PRIVATE_DB_REPO_TOKEN` | Yes | PAT or token with access to the private DB repo (for clone and push). |
+| `PRIVATE_DB_REPO` | No | Default: `{owner}/apartment-listings-db`. Set if your private repo has another name. |
+
+### GitHub Pages
+
+Enable the site under **Settings → Pages**: set **Source** to branch `main` and folder `/docs`. The workflow updates `docs/` after each run, so the site refreshes automatically.
+
+## Compliance / data acquisition
+
+We use **Bright Data** for Facebook Marketplace; they handle compliance. For any future direct scraping (e.g. other sites), the implementation will honor `robots.txt` and documented rate limits.
 
 ## Plan
 
