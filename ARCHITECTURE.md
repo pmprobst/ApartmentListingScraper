@@ -24,7 +24,7 @@ Fetch rental listings for Utah Valley from Facebook Marketplace via Bright Data,
 
 ## Storage
 
-Paths are configurable via `config.toml` (see `plan/config_schema.toml`) or env. Locally, defaults are under the project root; in CI, the DB and snapshot data live in a **separate private repo**.
+Paths are configurable via `config.toml` (see `config_schema.toml`) or env. Locally, defaults are under the project root; in CI, the DB and snapshot data live in a **separate private repo**.
 
 - **snapshot_history.jsonl** – append-only; statuses: initiated → running → downloaded → ingested. Location: `paths.data_dir` or repo root.
 - **snapshots/** – `marketplace_snapshot_<snapshot_id>.json` (downloaded Bright Data payloads). Same parent as history.
@@ -62,7 +62,7 @@ Paths are configurable via `config.toml` (see `plan/config_schema.toml`) or env.
 
 ### uvrental.config
 
-- Loads TOML config from `config.toml` (or `plan/config_schema.toml` if that is missing); `CONFIG_FILE` env overrides the path. Other env vars override config (e.g. `LISTINGS_DB`, `BUILD_PAGE_OUTPUT`, `SNAPSHOT_DATA_DIR`). Provides get_db_path, get_snapshot_history_path, get_snapshots_dir, get_price_min, get_price_max, get_output_dir, get_display_days, get_claude_model, get_claude_timeout, get_dataset_id, get_location, get_category, etc.
+- Loads TOML config from `config.toml` (or `config_schema.toml` if that is missing); `CONFIG_FILE` env overrides the path. Other env vars override config (e.g. `LISTINGS_DB`, `BUILD_PAGE_OUTPUT`, `SNAPSHOT_DATA_DIR`). Provides get_db_path, get_snapshot_history_path, get_snapshots_dir, get_price_min, get_price_max, get_output_dir, get_display_days, get_claude_model, get_claude_timeout, get_dataset_id, get_location, get_category, etc.
 
 ## Scripts
 

@@ -24,7 +24,7 @@ For architecture, data flow, and module details see [ARCHITECTURE.md](ARCHITECTU
 - **LISTINGS_DB** (optional) – path to the SQLite database. Default: `listings.db`.
 - **BUILD_PAGE_OUTPUT** (optional) – output directory for generated HTML. Default: `docs`.
 - **SNAPSHOT_DATA_DIR** (optional) – directory for `snapshot_history.jsonl` and `snapshots/`. Default: project root. In CI this points at the cloned private DB repo.
-- **CONFIG_FILE** (optional) – path to TOML config; otherwise `config.toml` or `plan/config_schema.toml` is used.
+- **CONFIG_FILE** (optional) – path to TOML config; otherwise `config.toml` or `config_schema.toml` is used.
 
 Do not commit `.env` or any file containing API keys. Use `.env` locally and GitHub Secrets in CI. The `.env` file is gitignored.
 

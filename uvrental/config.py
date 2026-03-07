@@ -2,7 +2,7 @@
 TOML config loader for Utah Valley Rental Skimmer.
 
 Loads config from paths.config_file (default config.toml), with fallback to
-plan/config_schema.toml. API keys remain in env / GitHub Secrets only.
+config_schema.toml in the project root. API keys remain in env / GitHub Secrets only.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ except ImportError:
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.toml"
-FALLBACK_CONFIG_PATH = PROJECT_ROOT / "plan" / "config_schema.toml"
+FALLBACK_CONFIG_PATH = PROJECT_ROOT / "config_schema.toml"
 
 _config_cache: dict | None = None
 
