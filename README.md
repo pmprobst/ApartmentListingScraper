@@ -79,3 +79,12 @@ Enable the site under **Settings → Pages**: set **Source** to branch `main` an
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** – how to run locally and run tests.
 - **docs/** – Generated static site (GitHub Pages); produced by the build_page step. For setup and architecture see README and ARCHITECTURE.md above.
 
+##Future Features
+- **standardize filters** - make DB to HTML filters global vars that can be toggled
+- **generalize variables** - make vars global
+  - location
+  - radius
+  - min price
+  - max price
+- **improve extraction logic**
+- **add extracted features** - add (optional) features to extract
