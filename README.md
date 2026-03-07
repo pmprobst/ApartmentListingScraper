@@ -2,6 +2,8 @@
 
 Fetches rental listings for Utah Valley from Facebook Marketplace (via Bright Data), stores them in SQLite, enriches them with Claude extraction, and publishes a static HTML page (e.g. GitHub Pages).
 
+For architecture, data flow, and module details see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Setup
 
 - **Python:** 3.x
@@ -17,19 +19,22 @@ Fetches rental listings for Utah Valley from Facebook Marketplace (via Bright Da
 
 ## Environment variables
 
-- **BRIGHTDATA_API_KEY** – required for `scripts/scrape.py` and `scripts/scrape_download.py`. Do not commit; use `.env` locally or GitHub Secrets in CI.
-- **ANTHROPIC_API_KEY** – required for the full pipeline (ingest + extraction + build). Used when running `main.py` or `scripts/run_pipeline.py`.
+- **BRIGHTDATA_API_KEY** – required for `scripts/scrape.py` and `scripts/scrape_download.py`.
+- **ANTHROPIC_API_KEY** – required for the full pipeline (ingest + extraction + build).
 - **LISTINGS_DB** (optional) – path to the SQLite database. Default: `listings.db`.
+- **BUILD_PAGE_OUTPUT** (optional) – output directory for generated HTML. Default: `docs`.
+- **SNAPSHOT_DATA_DIR** (optional) – directory for `snapshot_history.jsonl` and `snapshots/`. Default: project root. In CI this points at the cloned private DB repo.
+- **CONFIG_FILE** (optional) – path to TOML config; otherwise `config.toml` or `plan/config_schema.toml` is used.
 
-Do not commit `.env` or any file containing API keys. The `.env` file is gitignored.
+Do not commit `.env` or any file containing API keys. Use `.env` locally and GitHub Secrets in CI. The `.env` file is gitignored.
 
 ## End-to-end flow
 
 1. **Trigger a snapshot:** `python scripts/scrape.py`  
    Calls Bright Data and records a `snapshot_id` with status `"initiated"` in `snapshot_history.jsonl`.
 
-2. **Download snapshot JSON:** `python scripts/scrape_download.py`  
-   Polls Bright Data; when the snapshot is ready, saves `snapshots/marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
+2. **Download snapshot JSON:** `python scripts/scrape_download.py` [optional: `<snapshot_id>`]  
+   Checks all pending snapshots (oldest first); when ready, saves `snapshots/marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
 
 3. **Ingest, extract, and build page:** `python main.py`  
    Ingests all downloaded snapshots into the DB, runs regex + Claude extraction on listings with descriptions, and builds `docs/index.html`. You can also run `python scripts/run_pipeline.py` for the same pipeline (with project root on path). The same pipeline (ingest → extract → build_page) runs in CI via `main.py`.
@@ -72,6 +77,7 @@ Enable the site under **Settings → Pages**: set **Source** to branch `main` an
 
 We use **Bright Data** for Facebook Marketplace; they handle compliance. For any future direct scraping (e.g. other sites), the implementation will honor `robots.txt` and documented rate limits.
 
-## Plan
+## Documentation
 
-See the [plan/](plan/) directory for phases, features, and reference.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** – components, data flow, storage, scripts, and env vars.
+- **[plan/](plan/)** – phases, features, and reference.
