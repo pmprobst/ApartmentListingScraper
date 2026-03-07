@@ -1,9 +1,9 @@
 """
-Stage 2: Claude API extraction for apartment listing fields.
+Claude API extraction for apartment listing fields.
 
 Called when Stage 1 regex leaves fields unknown. Injects Stage 1 pre-fills
 into the prompt so the model doesn't re-derive what regex already found.
-See plan/extraction_plan.md.
+See ARCHITECTURE.md for extraction pipeline.
 """
 
 from __future__ import annotations

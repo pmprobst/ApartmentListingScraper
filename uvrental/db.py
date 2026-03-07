@@ -1,7 +1,7 @@
 """
 SQLite schema and deduplication for Utah Valley Rental Skimmer.
-Phase 0: listings table, address normalization, upsert by (source, source_listing_id).
-See plan/reference.md for schema and plan/phase-0.md for steps.
+Listings table, address normalization, upsert by (source, source_listing_id).
+See ARCHITECTURE.md for schema and data flow.
 """
 
 import json

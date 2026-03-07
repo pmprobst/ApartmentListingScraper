@@ -1,10 +1,37 @@
 # Architecture
 
-This document describes the Utah Valley Rental Skimmer: components, data flow, and how the files work together. See [README.md](README.md) for setup and [plan/](plan/) for phases and features.
+This document describes the Utah Valley Rental Skimmer: components, data flow, and how the files work together. See [README.md](README.md) for setup.
 
 ## High-level goal
 
 Fetch rental listings for Utah Valley from Facebook Marketplace via Bright Data, store them in SQLite, enrich with Claude extraction (regex + LLM), and publish a static HTML page (e.g. GitHub Pages).
+
+## Project structure
+
+```
+├── main.py                 # Entry point: full pipeline (ingest → extract → build)
+├── config.toml             # Runtime config (optional; config_schema.toml used if missing)
+├── config_schema.toml      # Schema/default config with comments
+├── scripts/                # Single-step and pipeline entry points
+│   ├── scrape.py           # Trigger Bright Data snapshot
+│   ├── scrape_download.py  # Download snapshot JSON
+│   ├── run_pipeline.py     # Same as main.py (adds project root to path)
+│   ├── ingest_records.py   # Ingest only
+│   ├── extract_new.py      # Extraction only (regex + Claude)
+│   └── build_page.py      # Build HTML only
+├── uvrental/               # Core package
+│   ├── db.py               # SQLite schema, dedup, run_status
+│   ├── ingest.py           # Snapshot ingestion
+│   ├── pipeline.py         # run_full_pipeline()
+│   ├── build_page.py       # Static HTML generation
+│   ├── config.py           # TOML + env config loader
+│   ├── brightdata.py       # Trigger snapshot API
+│   ├── brightdata_download.py
+│   ├── extraction_regex.py / extraction_claude.py / extraction_pipeline.py
+│   └── ...
+├── docs/                   # Generated site (GitHub Pages); output of build_page
+└── .github/workflows/      # CI: trigger snapshot + run pipeline
+```
 
 ## Data flow
 

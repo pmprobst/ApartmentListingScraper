@@ -1,7 +1,7 @@
 """
-Phase 1: Generate static HTML from SQLite listings and run_status.
+Generate static HTML from SQLite listings and run_status.
 Reads DB path, output path, and price filter from config (env override for local).
-Applies 30-day window. See plan/phase-1.md and plan/features.md.
+Applies 30-day window. See ARCHITECTURE.md for pipeline and filters.
 """
 
 import logging

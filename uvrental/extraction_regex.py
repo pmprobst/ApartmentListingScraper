@@ -1,8 +1,8 @@
 """
-Stage 1: Regex-based extraction for apartment listing fields.
+Regex-based extraction for apartment listing fields.
 
-Extracts high-confidence values from title + description before Stage 2 (Claude).
-See plan/extraction_plan.md for pattern rationale and data observations.
+Extracts high-confidence values from title + description before Claude extraction.
+See ARCHITECTURE.md for extraction pipeline.
 """
 
 from __future__ import annotations
