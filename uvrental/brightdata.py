@@ -26,9 +26,15 @@ load_dotenv()
 log = logging.getLogger(__name__)
 
 # History file path from config (shared with uvrental.ingest).
-def _snapshot_history_path():
-    from .config import get_snapshot_history_path
-    return get_snapshot_history_path()
+_snapshot_history_path_cache: Path | None = None
+
+
+def _snapshot_history_path() -> Path:
+    global _snapshot_history_path_cache
+    if _snapshot_history_path_cache is None:
+        from .config import get_snapshot_history_path
+        _snapshot_history_path_cache = get_snapshot_history_path()
+    return _snapshot_history_path_cache
 
 # Default query parameters (overridden by config or env).
 DEFAULT_RADIUS_MILES = 20
@@ -178,8 +184,9 @@ def trigger_from_env() -> None:
     print(data)
     snapshot_id = extract_snapshot_id(data)
     if snapshot_id:
+        history_path = _snapshot_history_path()
         record_snapshot_history(snapshot_id, status="initiated")
-        print(f"Recorded snapshot_id={snapshot_id} in {_snapshot_history_path().name}")
+        print(f"Recorded snapshot_id={snapshot_id} in {history_path.name}")
     else:
         print("Warning: trigger response did not include snapshot_id")
 
