@@ -31,7 +31,7 @@ def _snapshot_history_path():
 
 # Default query parameters (overridden by config or env).
 DEFAULT_RADIUS_MILES = 20
-DEFAULT_LIMIT_PER_INPUT = 10
+DEFAULT_LIMIT_PER_INPUT = 100
 
 TRIGGER_BASE_URL = "https://api.brightdata.com/datasets/v3/trigger"
 
