@@ -20,6 +20,7 @@ build/
 # IDE / OS
 .idea/
 .vscode/
+.cursor/
 .DS_Store
 CLAUDE.md
 *.swp
