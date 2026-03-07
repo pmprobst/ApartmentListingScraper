@@ -26,21 +26,30 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
-def _snapshot_history_path():
-    from .config import get_snapshot_history_path
-    return get_snapshot_history_path()
-
-
-def _snapshots_dir():
-    from .config import get_snapshots_dir
-    return get_snapshots_dir()
-
-
 PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress"
 SNAPSHOT_DOWNLOAD_URL = "https://api.brightdata.com/datasets/v3/snapshot"
 REQUEST_TIMEOUT_SEC = 60
 DOWNLOAD_RETRY_DELAY_SEC = 5
 DOWNLOAD_MAX_ATTEMPTS = 2
+
+_snapshot_history_path_cache: Path | None = None
+_snapshots_dir_cache: Path | None = None
+
+
+def _snapshot_history_path() -> Path:
+    global _snapshot_history_path_cache
+    if _snapshot_history_path_cache is None:
+        from .config import get_snapshot_history_path
+        _snapshot_history_path_cache = get_snapshot_history_path()
+    return _snapshot_history_path_cache
+
+
+def _snapshots_dir() -> Path:
+    global _snapshots_dir_cache
+    if _snapshots_dir_cache is None:
+        from .config import get_snapshots_dir
+        _snapshots_dir_cache = get_snapshots_dir()
+    return _snapshots_dir_cache
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -64,26 +73,6 @@ def _append_history(snapshot_id: str, status: str) -> None:
         f.write("\n")
 
 
-def _latest_snapshot_states() -> dict[str, str]:
-    """Read history and return the latest status per snapshot_id."""
-    path = _snapshot_history_path()
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
-    states: dict[str, str] = {}
-    for line in lines:
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        sid = rec.get("snapshot_id")
-        if not sid:
-            continue
-        states[sid] = (rec.get("status") or "").lower()
-    return states
-
-
 def _pending_snapshot_ids_oldest_first() -> list[str]:
     """
     Return snapshot_ids that are still pending (not downloaded/ingested),
@@ -92,21 +81,26 @@ def _pending_snapshot_ids_oldest_first() -> list[str]:
     path = _snapshot_history_path()
     if not path.exists():
         return []
-    with path.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
+    states: dict[str, str] = {}
     order: list[str] = []
     seen: set[str] = set()
-    for line in lines:
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        sid = rec.get("snapshot_id")
-        if not sid or sid in seen:
-            continue
-        seen.add(sid)
-        order.append(sid)
-    states = _latest_snapshot_states()
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            sid = rec.get("snapshot_id")
+            if not sid:
+                continue
+            status = (rec.get("status") or "").lower()
+            states[sid] = status
+            if sid not in seen:
+                seen.add(sid)
+                order.append(sid)
     return [sid for sid in order if states.get(sid, "") not in {"downloaded", "ingested"}]
 
 
@@ -122,7 +116,7 @@ def latest_pending_snapshot_id() -> str:
         raise FileNotFoundError(f"No snapshot history file at {path}")
     pending = _pending_snapshot_ids_oldest_first()
     if not pending:
-        raise ValueError(f"No valid snapshot_id entries found in {_snapshot_history_path()}")
+        raise ValueError(f"No valid snapshot_id entries found in {path}")
     return pending[-1]
 
 
