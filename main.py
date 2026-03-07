@@ -2,7 +2,7 @@
 Pipeline orchestrator for Utah Valley Rental Skimmer.
 
 Runs the full pipeline: ingest downloaded Bright Data snapshots into SQLite,
-build HTML, run extraction (regex then Claude until queue empty), then build HTML again.
+run extraction (regex then Claude until queue empty), then build the static HTML page.
 Designed to be run locally or from GitHub Actions.
 """
 

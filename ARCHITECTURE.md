@@ -36,7 +36,7 @@ Paths are configurable via `config.toml` (see `plan/config_schema.toml`) or env.
 ### uvrental.db
 
 - **listings table:** id, source, source_listing_id, normalized_address, link, title, price, beds, baths, first_seen, last_seen, listing_date, description, in_unit_washer_dryer, has_roommates, gender_preference, utilities_included, non_included_utilities_cost, lease_length, llm_extraction_status, canonical_listing_id. `UNIQUE(source, source_listing_id)`.
-- **run_status table:** Single row (id=1): last_run_ts, success, scraped, thrown, duplicate, added, total_count, new_count, updated_count, llm_processed, displayed. **last_run_ts and success** are set only by the ingest step (Bright Data download → ingest); LLM and build_page update only llm_processed and displayed.
+- **run_status table:** Single row (id=1): last_run_ts, success, scraped, thrown, duplicate, added, total_count, new_count, updated_count, llm_processed, displayed, run_start_ts. **last_run_ts and success** are set only by the ingest step (Bright Data download → ingest); ingest also sets **run_start_ts** at run start (for new-vs-updated tagging). LLM and build_page update only llm_processed and displayed.
 - **Functions:** normalize_address, get_connection, init_schema, upsert_listing, update_run_status_after_fetch, update_run_status_after_llm, update_run_status_after_build_page, update_listing_extraction, get_run_status.
 
 ### uvrental.ingest
@@ -62,7 +62,7 @@ Paths are configurable via `config.toml` (see `plan/config_schema.toml`) or env.
 
 ### uvrental.config
 
-- Loads TOML config from `config.toml` or `plan/config_schema.toml`; env vars override (e.g. `LISTINGS_DB`, `CONFIG_FILE`). Provides get_db_path, get_snapshot_history_path, get_snapshots_dir, get_price_min, get_price_max, get_output_dir, get_display_days, get_claude_model, get_claude_timeout, etc.
+- Loads TOML config from `config.toml` (or `plan/config_schema.toml` if that is missing); `CONFIG_FILE` env overrides the path. Other env vars override config (e.g. `LISTINGS_DB`, `BUILD_PAGE_OUTPUT`, `SNAPSHOT_DATA_DIR`). Provides get_db_path, get_snapshot_history_path, get_snapshots_dir, get_price_min, get_price_max, get_output_dir, get_display_days, get_claude_model, get_claude_timeout, get_dataset_id, get_location, get_category, etc.
 
 ## Scripts
 
