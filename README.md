@@ -1,6 +1,6 @@
-# Utah Valley Rental Skimmer
+# Apartment Listing Skimmer
 
-Fetches rental listings for Utah Valley from Facebook Marketplace (via Bright Data), stores them in SQLite, enriches them with Claude extraction, and publishes a static HTML page (e.g. GitHub Pages).
+Fetches rental listings from Facebook Marketplace (via Bright Data), stores them in SQLite, enriches them with Claude extraction, and publishes a static HTML page (e.g. GitHub Pages).
 
 For architecture, data flow, and module details see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -30,14 +30,12 @@ Do not commit `.env` or any file containing API keys. Use `.env` locally and Git
 
 ## End-to-end flow
 
-1. **Trigger a snapshot:** `python scripts/scrape.py`  
-   Calls Bright Data and records a `snapshot_id` with status `"initiated"` in `snapshot_history.jsonl`.
-
-2. **Download snapshot JSON:** `python scripts/scrape_download.py` [optional: `<snapshot_id>`]  
-   Checks all pending snapshots (oldest first); when ready, saves `snapshots/marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
-
-3. **Ingest, extract, and build page:** `python main.py`  
-   Ingests all downloaded snapshots into the DB, runs regex + Claude extraction on listings with descriptions, and builds `docs/index.html`. You can also run `python scripts/run_pipeline.py` for the same pipeline (with project root on path). The same pipeline (ingest → extract → build_page) runs in CI via `main.py`.
+1. **Trigger a snapshot:** `python scripts/scrape.py`
+  Calls Bright Data and records a `snapshot_id` with status `"initiated"` in `snapshot_history.jsonl`.
+2. **Download snapshot JSON:** `python scripts/scrape_download.py` [optional: `<snapshot_id>`]
+  Checks all pending snapshots (oldest first); when ready, saves `snapshots/marketplace_snapshot_<snapshot_id>.json` and updates history to `"downloaded"`.
+3. **Ingest, extract, and build page:** `python main.py`
+  Ingests all downloaded snapshots into the DB, runs regex + Claude extraction on listings with descriptions, and builds `docs/index.html`. You can also run `python scripts/run_pipeline.py` for the same pipeline (with project root on path). The same pipeline (ingest → extract → build_page) runs in CI via `main.py`.
 
 Output: `listings.db` and `docs/index.html` (by default). The HTML shows listings within the configured price range and 30-day window; female-only, has-roommates, and summer-only (no renewal option) listings are excluded from the page.
 
@@ -62,23 +60,22 @@ You can also run either workflow manually from **Actions** → select the workfl
 
 Configure these under **Settings → Secrets and variables → Actions**:
 
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `BRIGHTDATA_API_KEY` | Yes | Bright Data API key for trigger and download. |
-| `ANTHROPIC_API_KEY` | Yes | Claude API key for extraction. |
-| `PRIVATE_DB_REPO_TOKEN` | Yes | PAT or token with access to the private DB repo (for clone and push). |
-| `PRIVATE_DB_REPO` | No | Default: `{owner}/apartment-listings-db`. Set if your private repo has another name. |
+
+| Secret                  | Required | Description                                                                          |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `BRIGHTDATA_API_KEY`    | Yes      | Bright Data API key for trigger and download.                                        |
+| `ANTHROPIC_API_KEY`     | Yes      | Claude API key for extraction.                                                       |
+| `PRIVATE_DB_REPO_TOKEN` | Yes      | PAT or token with access to the private DB repo (for clone and push).                |
+| `PRIVATE_DB_REPO`       | No       | Default: `{owner}/apartment-listings-db`. Set if your private repo has another name. |
+
 
 ### GitHub Pages
 
 Enable the site under **Settings → Pages**: set **Source** to branch `main` and folder `/docs`. The workflow updates `docs/` after each run, so the site refreshes automatically.
-
-## Compliance / data acquisition
-
-We use **Bright Data** for Facebook Marketplace; they handle compliance. For any future direct scraping (e.g. other sites), the implementation will honor `robots.txt` and documented rate limits.
 
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** – components, data flow, storage, scripts, and env vars.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** – how to run locally and run tests.
 - **docs/** – Generated static site (GitHub Pages); produced by the build_page step. For setup and architecture see README and ARCHITECTURE.md above.
+
