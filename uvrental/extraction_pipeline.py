@@ -109,7 +109,7 @@ def get_listings_pending_llm(
 
     return conn.execute(
         """
-        SELECT id, title, description, beds, baths, in_unit_washer_dryer,
+        SELECT id, title, description, price, beds, baths, in_unit_washer_dryer,
                has_roommates, gender_preference, utilities_included,
                non_included_utilities_cost, lease_length
         FROM listings
@@ -274,7 +274,12 @@ def run_process_until_empty(db_path: str, batch_size: int = 5) -> int:
             {
                 "title": r["title"] or "",
                 "description": r["description"] or "",
-                "stage1": row_to_stage1_prefill(r),
+                "stage1": run_stage1(
+                    r["title"] or "",
+                    r["description"] or "",
+                    price=r.get("price"),
+                    db_beds=r.get("beds"),
+                ),
             }
             for r in rows
         ]

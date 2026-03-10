@@ -38,8 +38,9 @@ Field definitions:
   multi-person apartment). Also true for BYU/UVU "contract sales" where someone is selling their
   spot in an existing shared apartment, or when language implies other tenants (e.g. "sharing with",
   "people in my apartment", "tenants total", "spots available", "move here with a buddy").
-  false if the listing is for an entire unit with no other occupants (e.g. "no roommates",
-  "whole place to yourself"). null if genuinely unclear.
+  Also true when the listing advertises a "private room" (i.e., the tenant gets their own bedroom)
+  but shares the apartment with others. false if the listing is for an entire unit with no other
+  occupants (e.g. "no roommates", "whole place to yourself"). null if genuinely unclear.
 - gender_preference: "male", "female", or "any". Use "any" if no gender is mentioned.
 - utilities_included: a list of specific utilities included in rent (e.g. ["water","trash"]),
   the string "all" if all utilities are included, or null if utilities are not included.
@@ -56,7 +57,38 @@ Field definitions:
 
 When given multiple listings, return a JSON array of objects, one per listing, in the same order.
 
-Do not invent or assume values. If a field cannot be determined from the listing, return null."""
+Do not invent or assume values. If a field cannot be determined from the listing, return null.
+If a field is genuinely absent from the listing text (not just implicit), return null — do not
+infer from price, location, or context alone.
+
+Examples:
+---
+Listing: "Men's Private Room. 3 Roommates. $535/month. Utilities usually about $80."
+Output: {"bedrooms": null, "bathrooms": null, "in_unit_washer_dryer": null,
+  "has_roommates": true, "gender_preference": "male",
+  "utilities_included": null, "non_included_utilities_cost": "$80/month",
+  "lease_length": null}
+
+---
+Listing: "AVAILABLE APRIL-AUGUST 2026 with the option to renew for next year. Female private room."
+Output: {"bedrooms": null, "bathrooms": null, "in_unit_washer_dryer": null,
+  "has_roommates": true, "gender_preference": "female",
+  "utilities_included": null, "non_included_utilities_cost": null,
+  "lease_length": "summer w/ option to review"}
+
+---
+Listing: "Habitacion privada. Lavandería compartida. $550 con servicios básicos incluidos."
+Output: {"bedrooms": null, "bathrooms": null, "in_unit_washer_dryer": false,
+  "has_roommates": true, "gender_preference": "any",
+  "utilities_included": "all", "non_included_utilities_cost": null,
+  "lease_length": null}
+
+---
+Listing: "$75/month flat rate internet and utilities. Shared men's room (2/4 contracts for sale). Summer contract."
+Output: {"bedrooms": null, "bathrooms": null, "in_unit_washer_dryer": null,
+  "has_roommates": true, "gender_preference": "male",
+  "utilities_included": "all", "non_included_utilities_cost": null,
+  "lease_length": "summer"}"""
 
 
 def _load_client():
@@ -85,29 +117,40 @@ def _model_name() -> str:
 
 def build_user_message(title: str, description: str, stage1: dict) -> str:
     pre_fills = {k: v for k, v in stage1.items() if not k.startswith("_")}
+    missing = stage1.get("_missing_fields", [])
+    missing_instruction = (
+        f"\nFields still needing extraction: {missing}\n\n"
+        if missing
+        else "\n"
+    )
     return f"""Listing title: {title}
 
 Listing description:
 {description}
 
-Pre-extracted values (may be incomplete — correct any errors):
+Pre-extracted values (treat as ground truth — do NOT re-derive these):
 {json.dumps(pre_fills, indent=2)}
-
-Extract all fields and return the complete JSON object."""
+{missing_instruction}Return the complete JSON object with all 8 fields."""
 
 
 def build_batch_message(listings: list[dict]) -> str:
     """
     listings: list of {"title": ..., "description": ..., "stage1": ...}
+    stage1 should include _missing_fields when available.
     """
     parts = []
     for i, l in enumerate(listings, 1):
         pre = {k: v for k, v in l["stage1"].items() if not k.startswith("_")}
+        missing = l["stage1"].get("_missing_fields", [])
+        missing_line = (
+            f"\nFields still needing extraction: {missing}" if missing else ""
+        )
         parts.append(
             f"=== LISTING {i} ===\n"
             f"Title: {l['title']}\n\n"
             f"Description:\n{l['description']}\n\n"
-            f"Pre-extracted:\n{json.dumps(pre, indent=2)}"
+            f"Pre-extracted (treat as ground truth — do NOT re-derive):\n"
+            f"{json.dumps(pre, indent=2)}{missing_line}"
         )
     return (
         "\n\n".join(parts)
