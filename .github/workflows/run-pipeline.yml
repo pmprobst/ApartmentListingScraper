@@ -1,13 +1,13 @@
-# Download snapshots and run pipeline (ingest + extract + build). Runs 1 hour after Trigger Snapshot workflow.
-# Trigger runs daily at 9am UTC; this runs at 10am UTC so the snapshot has time to complete.
+# Download snapshots and run pipeline (ingest + extract + build). When scheduled, runs 1 hour after Trigger Snapshot (9am → 10am UTC).
+# Daily schedule paused — uncomment `schedule` below to resume 10am UTC.
 # Secrets required: BRIGHTDATA_API_KEY, ANTHROPIC_API_KEY, PRIVATE_DB_REPO_TOKEN
 # Optional: PRIVATE_DB_REPO
 
 name: Run Pipeline
 
 on:
-  schedule:
-    - cron: "0 10 * * *"  # 10am UTC daily (1 hour after trigger)
+  # schedule:
+  #   - cron: "0 10 * * *"  # 10am UTC daily (1 hour after trigger)
   workflow_dispatch:
 
 jobs:
