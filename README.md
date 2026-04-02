@@ -76,7 +76,6 @@ Enable the site under **Settings → Pages**: set **Source** to branch `main` an
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** – components, data flow, storage, scripts, and env vars.
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** – how to run locally and run tests.
 - **docs/** – Generated static site (GitHub Pages); produced by the build_page step. For setup and architecture see README and ARCHITECTURE.md above.
 
 ##Future Features

@@ -1,12 +1,13 @@
-# Trigger Bright Data snapshot only. Runs once daily; pipeline (download + ingest + build) runs 1 hour later via run-pipeline.yml.
+# Trigger Bright Data snapshot only. Pipeline (download + ingest + build) runs via run-pipeline.yml (manual or when schedule is re-enabled).
+# Scheduled runs paused — re-add `schedule` below to resume daily 9am UTC.
 # Secrets required: BRIGHTDATA_API_KEY, PRIVATE_DB_REPO_TOKEN
 # Optional: PRIVATE_DB_REPO
 
 name: Trigger Snapshot
 
 on:
-  schedule:
-    - cron: "0 9 * * *"  # 9am UTC daily
+  # schedule:
+  #   - cron: "0 9 * * *"  # 9am UTC daily
   workflow_dispatch:
 
 jobs:
